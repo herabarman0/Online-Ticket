@@ -1,0 +1,24 @@
+{% extends "base.html" %}
+{% block title %}লাকি মেলা{% endblock %}
+{% block shell %}
+<div class="login" style="position:static;min-height:100dvh">
+  <h1>লাকি মেলা</h1>
+  <p>পয়েন্টে টিকিট কিনুন, প্রতিদিন জেতার সুযোগ নিন।</p>
+  <div class="lt"><a href="{{ url_for('login') }}" class="{{ 'on' if mode=='login' }}">লগইন</a><a href="{{ url_for('signup') }}" class="{{ 'on' if mode=='signup' }}">নতুন অ্যাকাউন্ট</a></div>
+  {% for m in get_flashed_messages() %}<div class="fl" role="alert">{{ m }}</div>{% endfor %}
+  <form class="f" method="post">
+    {% if mode=='signup' %}<label for="name">নাম</label><input id="name" name="name" required maxlength="40" autocomplete="name">{% endif %}
+    <label for="email">ইমেইল</label><input id="email" name="email" type="email" required autocomplete="email">
+    <label for="pw">পাসওয়ার্ড</label><input id="pw" name="pw" type="password" required minlength="6" autocomplete="{{ 'new-password' if mode=='signup' else 'current-password' }}">
+    {% if mode=='signup' %}<label for="ref">রেফার কোড (থাকলে)</label><input id="ref" name="ref" value="{{ ref }}" maxlength="12">{% endif %}
+    <button class="btn" type="submit">{{ 'অ্যাকাউন্ট খুলুন, ১০০ পয়েন্ট ফ্রি' if mode=='signup' else 'ঢুকুন' }}</button>
+    {% if gcid %}<div style="text-align:center;color:var(--mute);margin:12px 0">অথবা</div>
+    <div id="g_id_onload" data-client_id="{{ gcid }}" data-callback="onGoogle" data-auto_prompt="false"></div>
+    <div class="g_id_signin" data-type="standard" data-size="large" data-text="continue_with" data-width="300"></div>{% endif %}
+  </form>
+</div>
+{% if gcid %}
+<script src="https://accounts.google.com/gsi/client" async defer></script>
+<script>function onGoogle(r){fetch("{{ url_for('google') }}",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({credential:r.credential})}).then(function(x){if(x.ok)location.href="{{ url_for('home') }}";else alert("গুগল লগইন হয়নি, আবার চেষ্টা করুন।")})}</script>
+{% endif %}
+{% endblock %}

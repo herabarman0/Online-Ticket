@@ -1,0 +1,10 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="pf"><div class="av">{{ u.name[0] }}</div><h2 style="margin:0">{{ u.name }}</h2><div class="sub">{{ u.email }}</div></div>
+<div class="row2"><div class="st"><b>{{ u.points|bn }}</b><span>পয়েন্ট</span></div><div class="st"><b>{{ u.wins|bn }}</b><span>জয়</span></div></div>
+<div class="rf"><b style="font-size:1.2rem">বন্ধুকে ডাকুন, {{ REF|bn }} পয়েন্ট পান</b><div style="opacity:.8">সে পাবে {{ SIGNUP|bn }} পয়েন্ট। যোগ দিয়েছেন {{ n_ref|bn }} জন।</div>
+  <div class="cp"><input readonly id="lnk" value="{{ link }}" aria-label="রেফার লিংক"><button class="btn sm" id="cpb" type="button" style="background:var(--ink)">কপি</button></div></div>
+<a class="btn out" style="display:block;text-align:center" href="{{ url_for('logout') }}">লগআউট</a>
+<script>document.getElementById("cpb").onclick=function(){var i=document.getElementById("lnk");i.select();
+ (navigator.clipboard?navigator.clipboard.writeText(i.value):Promise.resolve(document.execCommand("copy"))).then(function(){document.getElementById("cpb").textContent="কপি হয়েছে"})}</script>
+{% endblock %}

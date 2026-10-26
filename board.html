@@ -1,0 +1,14 @@
+{% extends "base.html" %}
+{% block content %}
+<h2>লিডারবোর্ড</h2><p class="sub">সবচেয়ে বেশি পয়েন্ট কার?</p>
+<div class="seg"><a href="?by=points" class="{{ 'on' if by=='points' }}">পয়েন্ট</a><a href="?by=tickets" class="{{ 'on' if by=='tickets' }}">টিকিট</a><a href="?by=wins" class="{{ 'on' if by=='wins' }}">জয়</a></div>
+{% set key = {'points':'points','tickets':'tix','wins':'wins'}[by] %}
+{% set unit = {'points':'পয়েন্ট','tickets':'টিকিট','wins':'জয়'}[by] %}
+{% if rows|length >= 3 %}
+<div class="pod">{% for i in [1,0,2] %}{% set x = rows[i] %}<div class="pd {{ 'f' if i==0 }}"><div class="r">{{ (i+1)|bn }}</div><b>{{ x.name.split()[0] }}</b><span>{{ x[key]|bn }} {{ unit }}</span></div>{% endfor %}</div>
+{% endif %}
+{% set rest = rows[3:] if rows|length >= 3 else rows %}
+{% for x in rest %}
+<div class="li {{ 'me' if x.id==u.id }}"><div class="rk">{{ loop.index + (3 if rows|length>=3 else 0) }}</div><div class="nmx">{{ x.name }}{{ ' (আপনি)' if x.id==u.id }}<small>{{ x.tix|bn }} টিকিট · {{ x.wins|bn }} জয়</small></div><b class="v">{{ x[key]|bn }}</b></div>
+{% endfor %}
+{% endblock %}

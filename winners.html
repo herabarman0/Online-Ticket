@@ -1,0 +1,6 @@
+{% extends "base.html" %}
+{% block content %}
+<h2>বিজয়ী</h2><p class="sub">সাম্প্রতিক ড্রের ফলাফল</p>
+{% for w in rows %}<div class="li wn {{ 'me' if w.uid==u.id }}"><div class="rk">★</div><div class="nmx">{{ w.name }}{{ ' (আপনি)' if w.uid==u.id }}<small>{{ w.title }} · টিকিট #{{ w.winner_num|pad4 }} · {{ w.ends|when }}</small></div><b class="v">{{ w.prize|m }}</b></div>
+{% else %}<div class="empty">প্রথম ড্রের ফলাফল এখানে দেখা যাবে।</div>{% endfor %}
+{% endblock %}
