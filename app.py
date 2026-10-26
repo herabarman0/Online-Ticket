@@ -3,12 +3,18 @@ from calendar import monthrange
 from datetime import datetime, timedelta
 from functools import wraps
 from zoneinfo import ZoneInfo
-from flask import Flask, g, render_template, request, redirect, url_for, session, flash, jsonify
+from flask import Flask, g, render_template, request, redirect, url_for, session, flash, jsonify, abort, send_from_directory
 from werkzeug.security import generate_password_hash, check_password_hash
 
-app = Flask(__name__)
+app = Flask(__name__, template_folder=".", static_folder=None)  # flat layout: all files in repo root
 app.secret_key = os.environ.get("SECRET_KEY", "change-me")
 app.config.update(SESSION_COOKIE_SAMESITE="Lax", SESSION_COOKIE_HTTPONLY=True)
+
+@app.route("/static/<path:filename>", endpoint="static")
+def static_files(filename):
+    if filename != "style.css":
+        abort(404)
+    return send_from_directory(app.root_path, "style.css")
 DB = os.environ.get("DB_PATH", "lucky.db")
 GCID = os.environ.get("GOOGLE_CLIENT_ID", "")
 TZ = ZoneInfo("Asia/Dhaka")
