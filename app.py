@@ -191,6 +191,8 @@ def signup():
         name, email, pw = f.get("name", "").strip()[:40], f.get("email", "").strip().lower(), f.get("pw", "")
         if not name or "@" not in email or len(pw) < 6:
             flash("নাম, সঠিক ইমেইল ও কমপক্ষে ৬ অক্ষরের পাসওয়ার্ড দিন।")
+        elif email in ADMINS:
+            flash("এই ইমেইলে অ্যাকাউন্ট খুলতে হবে না, সরাসরি লগইন করুন।")
         elif by_email(email):
             flash("এই ইমেইলে আগেই অ্যাকাউন্ট আছে। লগইন করুন।")
         else:
@@ -201,11 +203,20 @@ def signup():
 @app.route("/login", methods=["GET", "POST"])
 def login():
     if request.method == "POST":
-        u = by_email(request.form.get("email", "").strip().lower())
-        if u and u.get("pw") and check_password_hash(u["pw"], request.form.get("pw", "")):
-            session["uid"] = u["id"]
-            return redirect(url_for("admin" if u["email"] in ADMINS else "home"))
-        flash("ইমেইল বা পাসওয়ার্ড ঠিক নয়। গুগল দিয়ে খুললে গুগল বাটন ব্যবহার করুন।")
+        email, pw = request.form.get("email", "").strip().lower(), request.form.get("pw", "")
+        if email in ADMINS:
+            # admin signs in with the ADMIN_PASSWORD set in Render's Environment
+            if ADMIN_PASSWORD and hmac.compare_digest(pw.encode(), ADMIN_PASSWORD.encode()):
+                u = by_email(email)
+                session["uid"] = u["id"] if u else new_user(email, "Admin", None)
+                return redirect(url_for("admin"))
+            time.sleep(1)
+        else:
+            u = by_email(email)
+            if u and u.get("pw") and check_password_hash(u["pw"], pw):
+                session["uid"] = u["id"]
+                return redirect(url_for("home"))
+        flash("ইমেইল বা পাসওয়ার্ড ঠিক নয়।")
     return render_template("auth.html", mode="login", gcid=GCID, ref="")
 
 @app.post("/auth/google")
