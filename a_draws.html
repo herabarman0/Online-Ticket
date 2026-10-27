@@ -1,0 +1,17 @@
+{% extends "a_base.html" %}
+{% block title %}ড্র ও টিকিট{% endblock %}
+{% block content %}
+<div class="hd"><h1>ড্র ও টিকিট</h1></div>
+<div class="card"><h2>নতুন বিশেষ ড্র</h2>
+<form method="post" action="{{ url_for('admin_draw_new') }}"><div class="row">
+  <div><label for="t">নাম</label><input id="t" name="title" required maxlength="60"></div>
+  <div><label for="pz">পুরস্কার (পয়েন্ট)</label><input id="pz" name="prize" required inputmode="numeric"></div>
+  <div><label for="c">টিকিটের দাম</label><input id="c" name="cost" required inputmode="numeric"></div>
+  <div><label for="cp">মোট টিকিট</label><input id="cp" name="cap" required inputmode="numeric"></div>
+  <div><label for="e">শেষ সময়</label><input id="e" name="ends" type="datetime-local" required></div>
+  <button class="bt pk">তৈরি করুন</button></div></form></div>
+<div class="card"><div class="sc"><table class="rt"><thead><tr><th>ড্র</th><th>ধরন</th><th>পুরস্কার</th><th>বিক্রি</th><th>শেষ সময়</th><th>অবস্থা</th><th></th></tr></thead><tbody>
+{% for d in rows %}<tr><td data-l="ড্র">{{ d.title }}</td><td data-l="ধরন">{{ KL.get(d.kind, d.kind) }}</td><td data-l="পুরস্কার">{{ d.prize|m }}</td><td data-l="বিক্রি">{{ d.sold|bn }}/{{ d.cap|bn }}</td><td data-l="শেষ সময়">{{ d.ends|when }}</td>
+  <td data-l="অবস্থা">{% if d.status=='open' %}<span class="bd ok">চলছে</span>{% else %}<span class="bd mu">শেষ</span>{% endif %}</td><td class="r"><a class="bt sm gh" href="{{ url_for('admin_draw', did=d.id) }}">খুলুন</a></td></tr>
+{% else %}<tr><td>কোনো ড্র নেই</td></tr>{% endfor %}</tbody></table></div></div>
+{% endblock %}
