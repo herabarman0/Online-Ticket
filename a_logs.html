@@ -1,0 +1,10 @@
+{% extends "a_base.html" %}
+{% block title %}লগ{% endblock %}
+{% block content %}
+<div class="hd"><h1>অ্যাডমিন লগ</h1></div>
+<div class="card"><div class="sc"><table class="rt"><thead><tr><th>সময়</th><th>কাজ</th><th>ইউজার</th><th>বিবরণ</th><th>কে করেছে</th></tr></thead><tbody>
+{% for r in rows %}<tr><td data-l="সময়">{{ r.ts|when }}</td><td data-l="কাজ">{{ r.action }}</td>
+  <td data-l="ইউজার">{% if r.uid %}<a href="{{ url_for('admin_user', uid=r.uid) }}">{{ r.uname or r.name or r.uid }}</a>{% else %}—{% endif %}</td>
+  <td data-l="বিবরণ">{% if r.action=='points' %}{{ r.before|bn }} → {{ r.after|bn }} {{ '(' ~ r.reason ~ ')' if r.reason }}{% else %}{{ r.reason or r.title or '' }}{% endif %}</td><td data-l="কে">{{ r.admin }}</td></tr>
+{% else %}<tr><td>এখনো কিছু নেই</td></tr>{% endfor %}</tbody></table></div></div>
+{% endblock %}
