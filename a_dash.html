@@ -1,0 +1,22 @@
+{% extends "a_base.html" %}
+{% block title %}ড্যাশবোর্ড{% endblock %}
+{% block content %}
+<div class="hd"><h1>ড্যাশবোর্ড</h1><a class="bt gd" href="{{ url_for('admin_users') }}">ইউজার খুঁজুন</a></div>
+<div class="g">
+  <div class="stat hl"><b>{{ (st.users if st.users is not none else '—')|bn }}</b><span>মোট ইউজার</span></div>
+  <div class="stat"><b>{{ (st.new if st.new is not none else '—')|bn }}</b><span>আজকের নতুন</span></div>
+  <div class="stat"><b>{{ (st.banned if st.banned is not none else '—')|bn }}</b><span>ব্যান করা</span></div>
+  <a class="stat" href="{{ url_for('admin_claims') }}" style="text-decoration:none"><b>{{ (st.claims if st.claims is not none else '—')|bn }}</b><span>অপেক্ষমাণ পুরস্কার দাবি</span></a>
+</div>
+<div class="card"><h2>চলমান ড্র</h2><div class="sc"><table class="rt"><thead><tr><th>ড্র</th><th>পুরস্কার</th><th>বিক্রি</th><th>শেষ সময়</th><th></th></tr></thead><tbody>
+{% for d in draws %}<tr><td data-l="ড্র">{{ d.title }}</td><td data-l="পুরস্কার">{{ d.prize|m }}</td><td data-l="বিক্রি">{{ d.sold|bn }}/{{ d.cap|bn }}</td><td data-l="শেষ সময়">{{ d.ends|when }}</td><td class="r"><a class="bt sm gh" href="{{ url_for('admin_draw', did=d.id) }}">খুলুন</a></td></tr>
+{% else %}<tr><td>কোনো চলমান ড্র নেই</td></tr>{% endfor %}</tbody></table></div></div>
+<div class="g2">
+  <div class="card"><h2>সবচেয়ে বেশি পয়েন্ট</h2><div class="sc"><table class="rt"><tbody>{% for x in top %}
+    <tr><td data-l="{{ loop.index|bn }}"><a href="{{ url_for('admin_user', uid=x.id) }}">{{ x.name }}</a></td><td data-l="পয়েন্ট" class="r"><b>{{ x.points|bn }}</b></td></tr>{% endfor %}</tbody></table></div></div>
+  <div class="card"><h2>নতুন ইউজার</h2><div class="sc"><table class="rt"><tbody>{% for x in new %}
+    <tr><td data-l="নাম"><a href="{{ url_for('admin_user', uid=x.id) }}">{{ x.name }}</a></td><td data-l="যোগ দিয়েছেন" class="r">{{ x.created|when }}</td></tr>{% else %}<tr><td>কেউ নেই</td></tr>{% endfor %}</tbody></table></div></div>
+  <div class="card"><h2>সাম্প্রতিক বিজয়ী</h2><div class="sc"><table class="rt"><tbody>{% for w in wins %}
+    <tr><td data-l="বিজয়ী"><a href="{{ url_for('admin_user', uid=w.uid) }}">{{ w.name }}</a></td><td data-l="{{ w.title }}" class="r">{{ w.prize|m }}</td></tr>{% else %}<tr><td>এখনো কেউ জেতেনি</td></tr>{% endfor %}</tbody></table></div></div>
+</div>
+{% endblock %}
