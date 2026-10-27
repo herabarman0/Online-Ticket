@@ -24,7 +24,7 @@ def static_files(filename):
 GCID = os.environ.get("GOOGLE_CLIENT_ID", "")
 TZ = ZoneInfo("Asia/Dhaka")
 SIGNUP, REF, MAXT, AD_REWARD, AD_MAX = 100, 50, 5, 10, 5
-KL = {"daily": "প্রতিদিন", "weekly": "সাপ্তাহিক", "monthly": "মাসিক"}
+KL = {"daily": "প্রতিদিন", "weekly": "সাপ্তাহিক", "monthly": "মাসিক", "custom": "বিশেষ"}
 KO = {"daily": 0, "weekly": 1, "monthly": 2}
 ADMIN_PASSWORD = os.environ.get("ADMIN_PASSWORD", "")
 ADMINS = {e.strip().lower() for e in os.environ.get("ADMIN_EMAILS", "").split(",") if e.strip()}
@@ -63,6 +63,10 @@ def me():
     if uid:
         s = fs.collection("users").document(uid).get()
         u = snap(s) if s.exists else None
+        if u and u.get("banned") and u["email"] not in ADMINS:
+            session.clear()
+            flash("আপনার অ্যাকাউন্ট বন্ধ করা হয়েছে।")
+            u = None
     g._me = u
     return u
 
@@ -81,14 +85,14 @@ def by_email(e):
     for s in fs.collection("users").where("email", "==", e).limit(1).stream():
         return snap(s)
 
-def new_user(email, name, pw_hash, ref_code=""):
+def new_user(email, name, pw_hash, ref_code="", phone=""):
     ref = None
     if ref_code:
         for s in fs.collection("users").where("code", "==", ref_code).limit(1).stream():
             ref = s
     r = fs.collection("users").document()
     r.set({"email": email, "name": name, "pw": pw_hash, "points": SIGNUP, "code": secrets.token_hex(3).upper(),
-           "ref_by": ref.id if ref else None, "last_bonus": "", "wins": 0, "tix": 0, "streak": 0, "ad_day": "", "ad_n": 0})
+           "ref_by": ref.id if ref else None, "phone": phone, "created": time.time(), "banned": False, "last_bonus": "", "wins": 0, "tix": 0, "streak": 0, "ad_day": "", "ad_n": 0})
     if ref:
         ref.reference.update({"points": firestore.Increment(REF)})
     return r.id
@@ -103,7 +107,11 @@ def _finish_tx(tx, dref):
         num = secrets.randbelow(d["sold"]) + 1
         t = dref.collection("tickets").document(str(num)).get(transaction=tx).to_dict()
         uref = fs.collection("users").document(t["uid"])
-        u = uref.get(transaction=tx).to_dict()
+        us = uref.get(transaction=tx)
+        if not us.exists:
+            tx.update(dref, {"status": "done", "winner_num": num})
+            return
+        u = us.to_dict()
         tx.update(uref, {"points": u["points"] + d["prize"], "wins": u.get("wins", 0) + 1, "unclaimed": u.get("unclaimed", 0) + 1})
         tx.update(dref, {"status": "done", "winner_num": num, "winner_user": t["uid"]})
         tx.set(fs.collection("results").document(dref.id), {"uid": t["uid"], "name": u["name"], "title": d["title"],
@@ -191,12 +199,14 @@ def signup():
         name, email, pw = f.get("name", "").strip()[:40], f.get("email", "").strip().lower(), f.get("pw", "")
         if not name or "@" not in email or len(pw) < 6:
             flash("নাম, সঠিক ইমেইল ও কমপক্ষে ৬ অক্ষরের পাসওয়ার্ড দিন।")
+        elif not re.fullmatch(r"01\d{9}", norm_phone(f.get("phone", ""))):
+            flash("সঠিক মোবাইল নম্বর দিন (যেমন ০১৭XXXXXXXX)।")
         elif email in ADMINS:
             flash("এই ইমেইলে অ্যাকাউন্ট খুলতে হবে না, সরাসরি লগইন করুন।")
         elif by_email(email):
             flash("এই ইমেইলে আগেই অ্যাকাউন্ট আছে। লগইন করুন।")
         else:
-            session["uid"] = new_user(email, name, generate_password_hash(pw), session.pop("ref", "") or f.get("ref", "").strip().upper())
+            session["uid"] = new_user(email, name, generate_password_hash(pw), session.pop("ref", "") or f.get("ref", "").strip().upper(), norm_phone(f.get("phone", "")))
             return redirect(url_for("home"))
     return render_template("auth.html", mode="signup", gcid=GCID, ref=session.get("ref", ""))
 
@@ -214,7 +224,11 @@ def login():
         else:
             u = by_email(email)
             if u and u.get("pw") and check_password_hash(u["pw"], pw):
+                if u.get("banned"):
+                    flash("আপনার অ্যাকাউন্ট বন্ধ করা হয়েছে। অ্যাডমিনের সাথে যোগাযোগ করুন।")
+                    return render_template("auth.html", mode="login", gcid=GCID, ref="")
                 session["uid"] = u["id"]
+                fs.collection("users").document(u["id"]).update({"last_login": time.time()})
                 return redirect(url_for("home"))
         flash("ইমেইল বা পাসওয়ার্ড ঠিক নয়।")
     return render_template("auth.html", mode="login", gcid=GCID, ref="")
@@ -375,6 +389,14 @@ def profile():
 
 # ---------- prize claim (winner details) ----------
 PHONE = re.compile(r"^(?:\+?88)?01\d{9}$")
+def norm_phone(s):
+    p = re.sub(r"[\s-]", "", en(s))
+    if p.startswith("+88"):
+        p = p[3:]
+    elif p.startswith("88") and len(p) == 13:
+        p = p[2:]
+    return p
+
 def en(s):
     return (s or "").translate(str.maketrans("০১২৩৪৫৬৭৮৯", "0123456789"))
 
@@ -450,52 +472,235 @@ def admin_required(f):
         return f(*a, **k)
     return w
 
+@app.context_processor
+def _inj():
+    u = me()
+    return dict(admin_email=u["email"] if u else "")
+
+def cnt(q):
+    try:
+        return q.count().get()[0][0].value
+    except Exception:
+        return None
+
+def alog(action, **kw):
+    fs.collection("adminlog").document().set(dict(kw, action=action, admin=me()["email"], ts=time.time()))
+
+def get_user(uid):
+    s = fs.collection("users").document(uid).get()
+    if not s.exists:
+        abort(404)
+    return snap(s)
+
+def users_by_ids(ids):
+    ids = list(set(ids))
+    if not ids:
+        return {}
+    return {s.id: (s.to_dict() or {}) for s in fs.get_all([fs.collection("users").document(i) for i in ids])}
+
 @app.route("/admin")
 @admin_required
 def admin():
-    q = request.args.get("q", "").strip().lower()
+    U = fs.collection("users")
+    day0 = datetime.now(TZ).replace(hour=0, minute=0, second=0, microsecond=0).timestamp()
+    st = dict(users=cnt(U), banned=cnt(U.where("banned", "==", True)), new=cnt(U.where("created", ">=", day0)),
+              claims=cnt(fs.collection("claims").where("status", "==", "pending")))
+    draws = sorted((snap(s) for s in fs.collection("draws").where("status", "==", "open").stream()), key=lambda d: d["ends"])
+    top = [snap(s) for s in U.order_by("points", direction=DESC).limit(5).stream()]
+    new = [snap(s) for s in U.order_by("created", direction=DESC).limit(5).stream()]
+    wins = [snap(s) for s in fs.collection("results").order_by("ends", direction=DESC).limit(5).stream()]
+    return render_template("a_dash.html", st=st, draws=draws, top=top, new=new, wins=wins)
+
+@app.route("/admin/users")
+@admin_required
+def admin_users():
+    q, flt, srt = request.args.get("q", "").strip(), request.args.get("f", ""), request.args.get("s", "points")
+    col = {"points": "points", "tickets": "tix", "wins": "wins", "new": "created"}.get(srt, "points")
+    U = fs.collection("users")
     if q:
-        x = by_email(q)
-        users = [x] if x else []
+        if "@" in q:
+            x = by_email(q.lower())
+            rows = [x] if x else []
+        elif re.fullmatch(r"[\d+\s-]{6,}", en(q)):
+            rows = [snap(s) for s in U.where("phone", "==", norm_phone(q)).limit(20).stream()]
+        else:
+            rows = [snap(s) for s in U.where("name", ">=", q).where("name", "<=", q + "\uf8ff").limit(40).stream()]
+    elif flt == "banned":
+        rows = [snap(s) for s in U.where("banned", "==", True).limit(50).stream()]
     else:
-        users = [snap(s) for s in fs.collection("users").order_by("points", direction=DESC).limit(30).stream()]
-    claims = [snap(s) for s in fs.collection("claims").where("status", "==", "pending").limit(50).stream()]
-    return render_template("admin.html", u=me(), users=users, claims=claims, q=q)
+        rows = [snap(s) for s in U.order_by(col, direction=DESC).limit(50).stream()]
+        if col == "points":
+            for i, r in enumerate(rows[:3]):
+                r["rank"] = i + 1
+    return render_template("a_users.html", rows=rows, q=q, f=flt, s=srt)
+
+@app.route("/admin/user/<uid>")
+@admin_required
+def admin_user(uid):
+    x = get_user(uid)
+    uref = fs.collection("users").document(uid)
+    tix = [s.to_dict() for s in uref.collection("tickets").order_by("ts", direction=DESC).limit(100).stream()]
+    ids = list({t["draw"] for t in tix})
+    info = {s.id: (s.to_dict() or {}) for s in fs.get_all([fs.collection("draws").document(i) for i in ids])} if ids else {}
+    for t in tix:
+        d = info.get(t["draw"], {})
+        t["title"], t["status"] = d.get("title", "(মুছে গেছে)"), d.get("status", "")
+        t["won"] = d.get("winner_user") == uid and d.get("winner_num") == t["num"]
+    wins = sorted((snap(s) for s in fs.collection("results").where("uid", "==", uid).limit(50).stream()), key=lambda w: -w["ends"])
+    cl = {s.id: s.to_dict() for s in fs.get_all([fs.collection("claims").document(w["id"]) for w in wins])} if wins else {}
+    for w in wins:
+        w["claim"] = cl.get(w["id"])
+    U = fs.collection("users")
+    higher = cnt(U.where("points", ">", x["points"]))
+    refs = cnt(U.where("ref_by", "==", uid))
+    by = None
+    if x.get("ref_by"):
+        b = U.document(x["ref_by"]).get()
+        by = b.to_dict() if b.exists else None
+    hist = sorted((snap(s) for s in fs.collection("adminlog").where("uid", "==", uid).limit(30).stream()), key=lambda h: -h["ts"])
+    return render_template("a_user.html", x=x, tix=tix, wins=wins, rank=(higher + 1 if higher is not None else None),
+                           refs=refs, by=by, hist=hist)
 
 @firestore.transactional
-def _adj_tx(tx, uref, delta, lref, log):
+def _pts_tx(tx, uref, mode, amt, reason, admin_email):
     s = uref.get(transaction=tx)
     if not s.exists:
         raise Fail("ইউজার পাওয়া যায়নি।")
     p = s.to_dict()["points"]
-    new = max(0, p + delta)
+    new = max(0, p + amt if mode == "add" else amt)
     tx.update(uref, {"points": new})
-    tx.set(lref, dict(log, before=p, after=new))
+    tx.set(fs.collection("adminlog").document(), dict(action="points", uid=uref.id, mode=mode, amount=amt, before=p,
+                                                      after=new, reason=reason, admin=admin_email, ts=time.time()))
     return new
 
-@app.post("/admin/points")
+@app.post("/admin/user/<uid>/points")
 @admin_required
-def admin_points():
-    f, a = request.form, me()
+def admin_points(uid):
+    f = request.form
     try:
-        delta = int(en(f.get("delta", "")).strip())
-        assert 0 < abs(delta) <= 1000000
-        uid = f.get("uid", "")
-        new = _adj_tx(fs.transaction(), fs.collection("users").document(uid), delta, fs.collection("adjustments").document(),
-                      dict(uid=uid, delta=delta, reason=f.get("reason", "")[:80], admin=a["email"], ts=time.time()))
-        flash("পয়েন্ট বদলেছে, এখন %s।" % bn(new))
+        amt, mode = int(en(f.get("amount", "")).strip()), f.get("mode", "add")
+        assert mode in ("add", "set") and abs(amt) <= 10 ** 7
+        new = _pts_tx(fs.transaction(), fs.collection("users").document(uid), mode, amt, f.get("reason", "")[:80], me()["email"])
+        flash("পয়েন্ট এখন %s।" % bn(new))
     except (ValueError, AssertionError):
-        flash("সঠিক সংখ্যা দিন (যেমন 50 বা -50)।")
+        flash("সঠিক সংখ্যা দিন।")
     except Fail as e:
         flash(str(e))
-    return redirect(url_for("admin", q=f.get("q", "")))
+    return redirect(url_for("admin_user", uid=uid))
 
-@app.post("/admin/sent/<rid>")
+@app.post("/admin/user/<uid>/ban")
+@admin_required
+def admin_ban(uid):
+    x = get_user(uid)
+    if x["email"] in ADMINS:
+        flash("অ্যাডমিনকে ব্যান করা যায় না।")
+    else:
+        ban, why = request.form.get("do") == "ban", request.form.get("reason", "")[:80]
+        fs.collection("users").document(uid).update({"banned": ban, "ban_reason": why if ban else "", "ban_ts": time.time()})
+        alog("ban" if ban else "unban", uid=uid, reason=why)
+        flash("ইউজার ব্যান করা হয়েছে।" if ban else "ইউজারকে আনব্যান করা হয়েছে।")
+    return redirect(url_for("admin_user", uid=uid))
+
+@app.post("/admin/user/<uid>/edit")
+@admin_required
+def admin_edit(uid):
+    f = request.form
+    get_user(uid)
+    name, phone = f.get("name", "").strip()[:60], norm_phone(f.get("phone", ""))
+    if len(name) < 2 or (phone and not re.fullmatch(r"01\d{9}", phone)):
+        flash("নাম বা মোবাইল নম্বর সঠিক নয়।")
+    else:
+        fs.collection("users").document(uid).update({"name": name, "phone": phone})
+        alog("edit", uid=uid, name=name, phone=phone)
+        flash("তথ্য সেভ হয়েছে।")
+    return redirect(url_for("admin_user", uid=uid))
+
+@app.post("/admin/user/<uid>/delete")
+@admin_required
+def admin_delete(uid):
+    x = get_user(uid)
+    if x["email"] in ADMINS or request.form.get("ok", "").strip() != "DELETE":
+        flash("ডিলিট হয়নি। নিশ্চিত করতে DELETE লিখুন (অ্যাডমিন ডিলিট করা যায় না)।")
+        return redirect(url_for("admin_user", uid=uid))
+    uref = fs.collection("users").document(uid)
+    for s in uref.collection("tickets").limit(500).stream():
+        s.reference.delete()
+    uref.delete()
+    alog("delete", uid=uid, email=x["email"], name=x["name"])
+    flash("ইউজার ডিলিট হয়েছে।")
+    return redirect(url_for("admin_users"))
+
+@app.route("/admin/draws")
+@admin_required
+def admin_draws():
+    rows = [snap(s) for s in fs.collection("draws").order_by("ends", direction=DESC).limit(30).stream()]
+    return render_template("a_draws.html", rows=rows)
+
+@app.post("/admin/draws/new")
+@admin_required
+def admin_draw_new():
+    f = request.form
+    try:
+        title, prize, cost, cap = f["title"].strip()[:60], int(en(f["prize"])), int(en(f["cost"])), int(en(f["cap"]))
+        end = datetime.strptime(f["ends"], "%Y-%m-%dT%H:%M").replace(tzinfo=TZ)
+        assert title and prize > 0 and cost > 0 and 1 <= cap <= 100000 and end.timestamp() > time.time()
+    except (KeyError, ValueError, AssertionError):
+        flash("সব ঘর সঠিকভাবে পূরণ করুন, শেষ সময় ভবিষ্যতের হতে হবে।")
+        return redirect(url_for("admin_draws"))
+    e = int(end.timestamp())
+    fs.collection("draws").document("custom-%d" % e).set(dict(kind="custom", title=title, prize=prize, cost=cost, cap=cap,
+                                                              ends=e, status="open", sold=0))
+    alog("draw_new", title=title, prize=prize)
+    flash("নতুন ড্র তৈরি হয়েছে।")
+    return redirect(url_for("admin_draws"))
+
+@app.route("/admin/draw/<did>")
+@admin_required
+def admin_draw(did):
+    s = fs.collection("draws").document(did).get()
+    if not s.exists:
+        abort(404)
+    d = snap(s)
+    tix = [t.to_dict() for t in s.reference.collection("tickets").order_by("num").limit(200).stream()]
+    um = users_by_ids([t["uid"] for t in tix])
+    for t in tix:
+        t["user"] = um.get(t["uid"]) or {}
+    return render_template("a_draw.html", d=d, tix=tix)
+
+@app.post("/admin/draw/<did>/finish")
+@admin_required
+def admin_finish(did):
+    dref = fs.collection("draws").document(did)
+    dref.update({"ends": int(time.time()) - 1})
+    _finish_tx(fs.transaction(), dref)
+    alog("draw_finish", draw=did)
+    flash("ড্র শেষ করা হয়েছে।")
+    return redirect(url_for("admin_draw", did=did))
+
+@app.route("/admin/claims")
+@admin_required
+def admin_claims():
+    pend = [snap(s) for s in fs.collection("claims").where("status", "==", "pending").limit(50).stream()]
+    sent = sorted((snap(s) for s in fs.collection("claims").where("status", "==", "sent").limit(30).stream()),
+                  key=lambda c: -c.get("sent_ts", 0))
+    return render_template("a_claims.html", pend=pend, sent=sent)
+
+@app.post("/admin/claim/<rid>/sent")
 @admin_required
 def admin_sent(rid):
     fs.collection("claims").document(rid).update({"status": "sent", "sent_ts": time.time()})
+    alog("claim_sent", claim=rid)
     flash("পাঠানো হয়েছে হিসেবে চিহ্নিত।")
-    return redirect(url_for("admin"))
+    return redirect(url_for("admin_claims"))
+
+@app.route("/admin/logs")
+@admin_required
+def admin_logs():
+    rows = [snap(s) for s in fs.collection("adminlog").order_by("ts", direction=DESC).limit(60).stream()]
+    um = users_by_ids([r["uid"] for r in rows if r.get("uid")])
+    for r in rows:
+        r["uname"] = (um.get(r.get("uid")) or {}).get("name", "") if r.get("uid") else ""
+    return render_template("a_logs.html", rows=rows)
 
 if __name__ == "__main__":
     app.run(debug=True, port=5000)
