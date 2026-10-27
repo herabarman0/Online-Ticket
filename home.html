@@ -1,5 +1,6 @@
 {% extends "base.html" %}
 {% block content %}
+{% if u.unclaimed %}<a class="ad" style="background:var(--sun);text-decoration:none;margin:0 0 14px" href="{{ url_for('winners') }}"><div><b>অভিনন্দন, আপনি জিতেছেন!</b><small>পুরস্কার পেতে আপনার তথ্য জমা দিন</small></div></a>{% endif %}
 <div class="jp">
   <span class="t">আজকের জ্যাকপট</span>
   <div class="amt">{{ d.prize|m }}</div>
