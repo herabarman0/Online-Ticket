@@ -1,0 +1,19 @@
+{% extends "a_base.html" %}
+{% block title %}ইউজার{% endblock %}
+{% block content %}
+<div class="hd"><h1>ইউজার</h1></div>
+<form class="card row" method="get">
+  <div><label for="q">নাম, ইমেইল বা ফোন</label><input id="q" name="q" value="{{ q }}" placeholder="খুঁজুন"></div>
+  <div><label for="s">সাজান</label><select id="s" name="s"><option value="points" {{ 'selected' if s=='points' }}>পয়েন্ট</option><option value="tickets" {{ 'selected' if s=='tickets' }}>টিকিট</option><option value="wins" {{ 'selected' if s=='wins' }}>জয়</option><option value="new" {{ 'selected' if s=='new' }}>নতুন আগে</option></select></div>
+  <div><label for="f">ফিল্টার</label><select id="f" name="f"><option value="">সবাই</option><option value="banned" {{ 'selected' if f=='banned' }}>শুধু ব্যান করা</option></select></div>
+  <button class="bt pk">দেখুন</button>
+</form>
+<div class="card"><div class="sc"><table class="rt"><thead><tr><th>নাম</th><th>ইমেইল</th><th>ফোন</th><th class="r">পয়েন্ট</th><th class="r">টিকিট</th><th class="r">জয়</th><th>অবস্থা</th><th></th></tr></thead><tbody>
+{% for x in rows %}<tr>
+  <td data-l="নাম"><b>{{ x.name }}</b>{% if x.rank %} <span class="bd gold">টপ {{ x.rank|bn }}</span>{% endif %}</td>
+  <td data-l="ইমেইল">{{ x.email }}</td><td data-l="ফোন">{{ x.phone or '—' }}</td>
+  <td data-l="পয়েন্ট" class="r">{{ x.points|bn }}</td><td data-l="টিকিট" class="r">{{ x.get('tix',0)|bn }}</td><td data-l="জয়" class="r">{{ x.get('wins',0)|bn }}</td>
+  <td data-l="অবস্থা">{% if x.banned %}<span class="bd bad">ব্যান</span>{% else %}<span class="bd ok">সক্রিয়</span>{% endif %}</td>
+  <td class="r"><a class="bt sm" href="{{ url_for('admin_user', uid=x.id) }}">খুলুন</a></td></tr>
+{% else %}<tr><td>কোনো ইউজার পাওয়া যায়নি</td></tr>{% endfor %}</tbody></table></div></div>
+{% endblock %}
