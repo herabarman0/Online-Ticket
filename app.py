@@ -204,7 +204,7 @@ def login():
         u = by_email(request.form.get("email", "").strip().lower())
         if u and u.get("pw") and check_password_hash(u["pw"], request.form.get("pw", "")):
             session["uid"] = u["id"]
-            return redirect(url_for("home"))
+            return redirect(url_for("admin" if u["email"] in ADMINS else "home"))
         flash("ইমেইল বা পাসওয়ার্ড ঠিক নয়। গুগল দিয়ে খুললে গুগল বাটন ব্যবহার করুন।")
     return render_template("auth.html", mode="login", gcid=GCID, ref="")
 
@@ -436,24 +436,8 @@ def admin_required(f):
             return redirect(url_for("login"))
         if u["email"] not in ADMINS:
             abort(404)
-        if not session.get("adm"):
-            return redirect(url_for("admin_unlock"))
         return f(*a, **k)
     return w
-
-@app.route("/admin/unlock", methods=["GET", "POST"])
-@login_required
-def admin_unlock():
-    u = me()
-    if u["email"] not in ADMINS:
-        abort(404)
-    if request.method == "POST":
-        if ADMIN_PASSWORD and hmac.compare_digest(request.form.get("pw", "").encode(), ADMIN_PASSWORD.encode()):
-            session["adm"] = True
-            return redirect(url_for("admin"))
-        time.sleep(1)
-        flash("অ্যাডমিন পাসওয়ার্ড ঠিক নয়।")
-    return render_template("unlock.html", u=u)
 
 @app.route("/admin")
 @admin_required
