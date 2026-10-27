@@ -1,0 +1,15 @@
+{% extends "a_base.html" %}
+{% block title %}পুরস্কার দাবি{% endblock %}
+{% block content %}
+<div class="hd"><h1>পুরস্কার দাবি</h1></div>
+<h2>অপেক্ষমাণ ({{ pend|length|bn }})</h2>
+<div class="g2">{% for c in pend %}<div class="card"><b>{{ c.title }}</b> · টিকিট #{{ c.winner_num|pad4 }} · {{ c.prize|m }} পয়েন্ট
+  <dl class="kv" style="margin-top:10px"><dt>নাম</dt><dd>{{ c.name }}</dd><dt>ফোন</dt><dd><a href="tel:{{ c.phone }}">{{ c.phone }}</a></dd><dt>বয়স</dt><dd>{{ c.age|bn }}</dd>
+  <dt>ঠিকানা</dt><dd>{{ c.address }}</dd><dt>ফেসবুক</dt><dd><a href="{{ c.fb }}" target="_blank" rel="noopener noreferrer">{{ c.fb }}</a></dd><dt>ইমেইল</dt><dd>{{ c.email }}</dd></dl>
+  <form method="post" action="{{ url_for('admin_sent', rid=c.id) }}"><button class="bt gd">পাঠানো হয়েছে</button> <a class="bt gh" href="{{ url_for('admin_user', uid=c.uid) }}">ইউজার দেখুন</a></form></div>
+{% else %}<div class="card mut">কোনো অপেক্ষমাণ দাবি নেই।</div>{% endfor %}</div>
+<h2 style="margin-top:20px">সম্প্রতি পাঠানো</h2>
+<div class="card"><div class="sc"><table class="rt"><thead><tr><th>নাম</th><th>ফোন</th><th>পুরস্কার</th><th>সময়</th></tr></thead><tbody>
+{% for c in sent %}<tr><td data-l="নাম">{{ c.name }}</td><td data-l="ফোন">{{ c.phone }}</td><td data-l="পুরস্কার">{{ c.title }} · {{ c.prize|m }}</td><td data-l="সময়">{{ c.sent_ts|when if c.sent_ts else '—' }}</td></tr>
+{% else %}<tr><td>কিছু নেই</td></tr>{% endfor %}</tbody></table></div></div>
+{% endblock %}
