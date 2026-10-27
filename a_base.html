@@ -1,0 +1,78 @@
+<!doctype html>
+<html lang="bn">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>{% block title %}অ্যাডমিন{% endblock %} — লাকি মেলা</title>
+<link href="https://fonts.googleapis.com/css2?family=Galada&family=Hind+Siliguri:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+:root{--plum:#2A0E4A;--pink:#FF2E7E;--gold:#FFC53D;--bg:#F4F1FA;--card:#fff;--ink:#241638;--mute:#6F6585;--line:#E7E1F1;--ok:#0E8F63;--bad:#D6244A;--soft:#EFE9FA}
+@media (prefers-color-scheme:dark){:root{--bg:#150A29;--card:#231240;--ink:#F3EEFB;--mute:#B5A8D0;--line:#37205C;--soft:#2D1850;--ok:#3DDBA1;--bad:#FF6B8A}}
+*{box-sizing:border-box}html{scroll-padding-top:90px}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:"Hind Siliguri","Noto Sans Bengali",system-ui,sans-serif;line-height:1.55}
+a{color:inherit}h1,h2,h3{margin:0}
+.sb{position:fixed;left:0;top:0;bottom:0;width:232px;background:var(--plum);color:#fff;padding:20px 14px;display:flex;flex-direction:column;gap:6px;z-index:20}
+.sb .br{font-family:"Galada",sans-serif;font-size:1.6rem;color:var(--gold);text-decoration:none;margin-bottom:10px}
+.sb nav{display:flex;flex-direction:column;gap:4px}
+.sb nav a{padding:10px 14px;border-radius:12px;text-decoration:none;color:#D6C8EE;font-weight:500;white-space:nowrap}
+.sb nav a.on{background:var(--gold);color:var(--plum);font-weight:700}
+.sb .me{margin-top:auto;font-size:.82rem;color:#B5A5D3;word-break:break-all}
+.sb .me a{color:#fff}
+.mn{margin-left:232px;min-height:100vh}
+.ct{max-width:1100px;margin:0 auto;padding:24px}
+@media(max-width:899px){
+ .sb{position:sticky;width:auto;bottom:auto;flex-direction:row;align-items:center;gap:10px;padding:10px 12px;padding-top:calc(10px + env(safe-area-inset-top,0px));overflow-x:auto}
+ .sb .br{margin:0;font-size:1.3rem}.sb nav{flex-direction:row}.sb .me{display:none}
+ .mn{margin-left:0}.ct{padding:16px 14px 40px}}
+.hd{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:16px}
+h1{font-size:1.7rem}h2{font-size:1.15rem;margin-bottom:12px}
+.fl{background:var(--gold);color:var(--plum);font-weight:700;padding:10px 14px;border-radius:12px;margin-bottom:14px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:18px;padding:18px;margin-bottom:16px;min-width:0}
+.g{display:grid;gap:14px;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));margin-bottom:16px}
+.g2{display:grid;gap:16px;grid-template-columns:repeat(auto-fit,minmax(300px,1fr))}
+.stat{background:var(--card);border:1px solid var(--line);border-radius:18px;padding:16px}.stat b{display:block;font-size:2rem;line-height:1.2}.stat span{color:var(--mute);font-size:.9rem}
+.stat.hl{background:var(--plum);color:#fff;border-color:var(--plum)}.stat.hl span{color:#D6C8EE}
+.kv{display:grid;grid-template-columns:130px 1fr;gap:6px 12px}.kv dt{color:var(--mute)}.kv dd{margin:0;word-break:break-word}
+table.rt{width:100%;border-collapse:collapse}
+.rt th{text-align:left;color:var(--mute);font-weight:500;font-size:.88rem;padding:8px 6px;border-bottom:1px solid var(--line)}
+.rt td{padding:10px 6px;border-bottom:1px solid var(--line);vertical-align:top}
+.rt tr:last-child td{border:0}.rt .r{text-align:right}
+.sc{overflow-x:auto}
+@media(max-width:760px){
+ .rt thead{display:none}.rt,.rt tbody,.rt tr,.rt td{display:block;width:100%}
+ .rt tr{border:1px solid var(--line);border-radius:14px;padding:6px 12px;margin-bottom:10px;background:var(--soft)}
+ .rt td{display:flex;justify-content:space-between;gap:14px;border:0;padding:5px 0;text-align:right}
+ .rt td::before{content:attr(data-l);color:var(--mute);text-align:left;flex:none}.rt .r{text-align:right}}
+.bd{display:inline-block;padding:1px 10px;border-radius:99px;font-size:.8rem;font-weight:700;background:var(--soft);color:var(--ink)}
+.bd.ok{background:rgba(14,143,99,.15);color:var(--ok)}.bd.bad{background:rgba(214,36,74,.15);color:var(--bad)}.bd.gold{background:var(--gold);color:var(--plum)}.bd.mu{color:var(--mute)}
+label{display:block;font-weight:700;font-size:.9rem;margin:10px 0 4px}
+input,select{width:100%;padding:10px 12px;border:2px solid var(--line);border-radius:12px;background:var(--card);color:var(--ink);font:inherit}
+.bt{display:inline-block;border:0;border-radius:12px;padding:10px 18px;font:inherit;font-weight:700;cursor:pointer;background:var(--plum);color:#fff;text-decoration:none;text-align:center}
+.bt.pk{background:var(--pink)}.bt.gd{background:var(--gold);color:var(--plum)}.bt.rd{background:var(--bad)}.bt.gh{background:var(--soft);color:var(--ink)}.bt.sm{padding:6px 12px;font-size:.9rem}
+.row{display:flex;gap:10px;flex-wrap:wrap;align-items:end}.row>*{flex:1;min-width:130px}.row .bt{flex:none}
+.tabs{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:14px}.tabs a{padding:6px 14px;border-radius:99px;background:var(--soft);text-decoration:none;font-weight:500}.tabs a.on{background:var(--plum);color:#fff}
+.danger{border-color:var(--bad)}.danger h2{color:var(--bad)}
+.mut{color:var(--mute)}.sm{font-size:.88rem}
+button:focus-visible,a:focus-visible,input:focus-visible,select:focus-visible{outline:3px solid var(--gold);outline-offset:2px}
+</style>
+</head>
+<body>
+{% set ep = request.endpoint %}
+<aside class="sb">
+  <a class="br" href="{{ url_for('admin') }}">লাকি মেলা</a>
+  <nav>
+    <a href="{{ url_for('admin') }}" class="{{ 'on' if ep=='admin' }}">ড্যাশবোর্ড</a>
+    <a href="{{ url_for('admin_users') }}" class="{{ 'on' if ep in ('admin_users','admin_user') }}">ইউজার</a>
+    <a href="{{ url_for('admin_draws') }}" class="{{ 'on' if ep in ('admin_draws','admin_draw') }}">ড্র ও টিকিট</a>
+    <a href="{{ url_for('admin_claims') }}" class="{{ 'on' if ep=='admin_claims' }}">পুরস্কার দাবি</a>
+    <a href="{{ url_for('admin_logs') }}" class="{{ 'on' if ep=='admin_logs' }}">লগ</a>
+    <a href="{{ url_for('home') }}">সাইট দেখুন</a>
+  </nav>
+  <div class="me">{{ admin_email }}<br><a href="{{ url_for('logout') }}">লগআউট</a></div>
+</aside>
+<div class="mn"><main class="ct">
+  {% for m in get_flashed_messages() %}<div class="fl" role="status">{{ m }}</div>{% endfor %}
+  {% block content %}{% endblock %}
+</main></div>
+</body>
+</html>
