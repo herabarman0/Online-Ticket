@@ -1,4 +1,4 @@
-import os, re, secrets, time, json, urllib.request, urllib.parse
+import os, re, hmac, secrets, time, json, urllib.request, urllib.parse
 from urllib.parse import urlparse
 from calendar import monthrange
 from datetime import datetime, timedelta
@@ -26,6 +26,7 @@ TZ = ZoneInfo("Asia/Dhaka")
 SIGNUP, REF, MAXT, AD_REWARD, AD_MAX = 100, 50, 5, 10, 5
 KL = {"daily": "প্রতিদিন", "weekly": "সাপ্তাহিক", "monthly": "মাসিক"}
 KO = {"daily": 0, "weekly": 1, "monthly": 2}
+ADMIN_PASSWORD = os.environ.get("ADMIN_PASSWORD", "")
 ADMINS = {e.strip().lower() for e in os.environ.get("ADMIN_EMAILS", "").split(",") if e.strip()}
 app.jinja_env.globals.update(KL=KL, MAXT=MAXT, AD_REWARD=AD_REWARD)
 
@@ -190,8 +191,6 @@ def signup():
         name, email, pw = f.get("name", "").strip()[:40], f.get("email", "").strip().lower(), f.get("pw", "")
         if not name or "@" not in email or len(pw) < 6:
             flash("নাম, সঠিক ইমেইল ও কমপক্ষে ৬ অক্ষরের পাসওয়ার্ড দিন।")
-        elif email in ADMINS:
-            flash("এই ইমেইল শুধু গুগল দিয়ে ঢোকা যাবে।")
         elif by_email(email):
             flash("এই ইমেইলে আগেই অ্যাকাউন্ট আছে। লগইন করুন।")
         else:
@@ -203,7 +202,7 @@ def signup():
 def login():
     if request.method == "POST":
         u = by_email(request.form.get("email", "").strip().lower())
-        if u and u["email"] not in ADMINS and u.get("pw") and check_password_hash(u["pw"], request.form.get("pw", "")):
+        if u and u.get("pw") and check_password_hash(u["pw"], request.form.get("pw", "")):
             session["uid"] = u["id"]
             return redirect(url_for("home"))
         flash("ইমেইল বা পাসওয়ার্ড ঠিক নয়। গুগল দিয়ে খুললে গুগল বাটন ব্যবহার করুন।")
@@ -437,8 +436,24 @@ def admin_required(f):
             return redirect(url_for("login"))
         if u["email"] not in ADMINS:
             abort(404)
+        if not session.get("adm"):
+            return redirect(url_for("admin_unlock"))
         return f(*a, **k)
     return w
+
+@app.route("/admin/unlock", methods=["GET", "POST"])
+@login_required
+def admin_unlock():
+    u = me()
+    if u["email"] not in ADMINS:
+        abort(404)
+    if request.method == "POST":
+        if ADMIN_PASSWORD and hmac.compare_digest(request.form.get("pw", "").encode(), ADMIN_PASSWORD.encode()):
+            session["adm"] = True
+            return redirect(url_for("admin"))
+        time.sleep(1)
+        flash("অ্যাডমিন পাসওয়ার্ড ঠিক নয়।")
+    return render_template("unlock.html", u=u)
 
 @app.route("/admin")
 @admin_required
