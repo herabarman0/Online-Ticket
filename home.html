@@ -1,7 +1,8 @@
 {% extends "base.html" %}
 {% block content %}
+{% if live_d %}<a class="ad" style="background:var(--pink);color:#fff;text-decoration:none;margin:0 0 14px" href="{{ url_for('live', did=live_d.id) }}"><div><b>লাইভ ড্র {{ 'চলছে' if live_d.status=='drawing' else 'শীঘ্রই শুরু' }}</b><small style="opacity:.9">{{ live_d.title }} · দেখতে চাপুন</small></div></a>{% endif %}
 {% if u.unclaimed %}<a class="ad" style="background:var(--sun);text-decoration:none;margin:0 0 14px" href="{{ url_for('winners') }}"><div><b>অভিনন্দন, আপনি জিতেছেন!</b><small>পুরস্কার পেতে আপনার তথ্য জমা দিন</small></div></a>{% endif %}
-<div class="jp">
+{% if d %}<div class="jp">
   <span class="t">আজকের জ্যাকপট</span>
   <div class="amt">{{ d.prize|m }}</div>
   <div class="ringwrap">
@@ -10,7 +11,8 @@
     <div class="jinfo">{{ d.ends|when }} এ ড্র<br><b>{{ d.sold|bn }}/{{ d.cap|bn }}</b> টিকিট বিক্রি<div class="prog"><i style="width:{{ d.sold*100//d.cap }}%"></i></div>আপনার <b>{{ d.mine|bn }}</b>/{{ MAXT|bn }} টিকিট</div>
   </div>
   <a class="btn" style="display:block;text-align:center" href="{{ url_for('ticket', d=d.id) }}">টিকিট নিন</a>
-</div>
+  <a class="btn sun" style="display:block;text-align:center;margin-top:10px" href="{{ url_for('live', did=d.id) }}">লাইভ ড্র পেজ</a>
+</div>{% else %}<div class="empty">এখন কোনো ড্র চালু নেই। নতুন ড্র শীঘ্রই আসছে।</div>{% endif %}
 <div class="row2"><div class="st"><b>{{ tcount|bn }}</b><span>মোট টিকিট</span></div><div class="st"><b>{{ u.wins|bn }}</b><span>জয়</span></div></div>
 
 <div class="streak"><b>৭ দিনের স্ট্রিক</b><span class="sub"> · রোজ ঢুকলে বোনাস বাড়ে</span>
@@ -21,8 +23,8 @@
 
 <script>
 var B="০১২৩৪৫৬৭৮৯";function bn(s){return String(s).replace(/\d/g,function(d){return B[d]})}
-var ENDS={{ d.ends }};
-function tick(){var s=Math.max(0,ENDS-Math.floor(Date.now()/1000));
+var ENDS={{ d.ends if d else 0 }};
+function tick(){if(!document.getElementById("ct"))return;var s=Math.max(0,ENDS-Math.floor(Date.now()/1000));
  function p(n){return String(n).padStart(2,"0")}
  document.getElementById("ct").textContent=bn(p(Math.floor(s/3600))+":"+p(Math.floor(s%3600/60))+":"+p(s%60));
  document.getElementById("arc").style.strokeDashoffset=326.7*(1-Math.min(1,s/86400))}
