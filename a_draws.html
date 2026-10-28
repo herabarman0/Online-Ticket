@@ -11,7 +11,7 @@
   <div><label for="e">শেষ সময়</label><input id="e" name="ends" type="datetime-local" required></div>
   <button class="bt pk">তৈরি করুন</button></div></form></div>
 <div class="card"><div class="sc"><table class="rt"><thead><tr><th>ড্র</th><th>ধরন</th><th>পুরস্কার</th><th>বিক্রি</th><th>শেষ সময়</th><th>অবস্থা</th><th></th></tr></thead><tbody>
-{% for d in rows %}<tr><td data-l="ড্র">{{ d.title }}</td><td data-l="ধরন">{{ KL.get(d.kind, d.kind) }}</td><td data-l="পুরস্কার">{{ d.prize|m }}</td><td data-l="বিক্রি">{{ d.sold|bn }}/{{ d.cap|bn }}</td><td data-l="শেষ সময়">{{ d.ends|when }}</td>
-  <td data-l="অবস্থা">{% if d.status=='open' %}<span class="bd ok">চলছে</span>{% else %}<span class="bd mu">শেষ</span>{% endif %}</td><td class="r"><a class="bt sm gh" href="{{ url_for('admin_draw', did=d.id) }}">খুলুন</a></td></tr>
+{% for d in rows %}<tr><td data-l="ড্র">{{ d.title }}</td><td data-l="ধরন">{{ 'আপনার ড্র' if d.kind=='custom' else 'পুরোনো স্বয়ংক্রিয় (' ~ KL.get(d.kind, d.kind) ~ ')' }}</td><td data-l="পুরস্কার">{{ d.prize|m }}</td><td data-l="বিক্রি">{{ d.sold|bn }}/{{ d.cap|bn }}</td><td data-l="শেষ সময়">{{ d.ends|when }}</td>
+  <td data-l="অবস্থা">{% if d.status=='open' %}<span class="bd ok">চলছে</span>{% elif d.status=='cancelled' %}<span class="bd bad">বাতিল</span>{% elif d.status=='drawing' %}<span class="bd gold">ড্র চলছে</span>{% else %}<span class="bd mu">শেষ</span>{% endif %}</td><td class="r"><a class="bt sm gh" href="{{ url_for('admin_draw', did=d.id) }}">খুলুন</a></td></tr>
 {% else %}<tr><td>কোনো ড্র নেই</td></tr>{% endfor %}</tbody></table></div></div>
 {% endblock %}
