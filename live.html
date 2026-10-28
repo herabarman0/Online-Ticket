@@ -33,7 +33,8 @@ function cd(s){var h=Math.floor(s/3600),m=Math.floor(s%3600/60),x=Math.floor(s%6
 function frame(){
  if(S&&!done){
   var now=(Date.now()+off)/1000,t=now-S.ends,reel=$("reel"),msg=$("msg");
-  if(S.status==="open"&&t<0){
+  if(S.status==="cancelled"){done=true;reel.textContent="— — — —";msg.textContent="এই ড্র বাতিল হয়েছে। টিকিটের পয়েন্ট ফেরত দেওয়া হয়েছে।"}
+  else if(S.status==="open"&&t<0){
    reel.textContent="— — — —";reel.className="reel";msg.textContent="ড্র শুরু হতে বাকি "+cd(-t);
    if(-t<4&&Date.now()-lastPoll>2000)load();
   }else if(t<S.spin&&S.status!=="done"||(t<S.spin&&S.winner_num)){
