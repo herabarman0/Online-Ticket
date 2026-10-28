@@ -1,0 +1,58 @@
+{% extends "base.html" %}
+{% block content %}
+<style>
+.lv{background:var(--cream);color:var(--ink);border-radius:26px;padding:22px;text-align:center;margin-top:6px}
+.lv .t{font-weight:700;color:var(--pink)}
+.lv .pz{font-family:"Galada",sans-serif;font-size:2.4rem;line-height:1.1}
+.reel{font-family:"Galada",sans-serif;font-size:5.2rem;line-height:1.1;margin:14px 0;color:var(--pink);font-variant-numeric:tabular-nums;background:#fff;border-radius:20px;padding:6px 0;border:3px dashed var(--line)}
+.reel.stop{color:var(--ink);background:var(--sun);border-color:var(--sun)}
+.msg{font-weight:700;font-size:1.15rem;min-height:3.4em}
+.cf{position:fixed;top:-20px;width:10px;height:14px;border-radius:2px;z-index:50;pointer-events:none}
+@keyframes fall{to{transform:translateY(110vh) rotate(540deg)}}
+@media (prefers-reduced-motion:reduce){.cf{display:none}}
+</style>
+<h2>লাইভ ড্র</h2>
+<div class="lv">
+  <div class="t">{{ d.title }}</div>
+  <div class="pz">{{ d.prize|m }} পয়েন্ট</div>
+  <div class="reel" id="reel" aria-live="off">০০০০</div>
+  <div class="msg" id="msg" role="status">লোড হচ্ছে…</div>
+</div>
+<p class="sub" style="margin-top:14px">ড্র শুরু হলে সবার ফোনে একই সময়ে ১ মিনিটের স্পিন চলবে। পেজ খোলা রাখুন।</p>
+<script>
+(function(){
+var B="০১২৩৪৫৬৭৮৯",$=function(i){return document.getElementById(i)};
+function bn(s){return String(s).replace(/\d/g,function(d){return B[d]})}
+function pad(n){return bn(String(n).padStart(4,"0"))}
+var S=null,off=0,polling=null,lastPoll=0,done=false,R=600;
+function load(){var t0=Date.now();fetch("{{ url_for('live_state', did=d.id) }}",{cache:"no-store"}).then(function(r){return r.json()}).then(function(j){
+ S=j;off=j.now*1000-((t0+Date.now())/2);lastPoll=Date.now()}).catch(function(){})}
+function confetti(){var c=["#FF2E7E","#FFC53D","#19D3C5","#fff"];for(var i=0;i<60;i++){var e=document.createElement("i");e.className="cf";
+ e.style.left=Math.random()*100+"vw";e.style.background=c[i%4];e.style.animation="fall "+(2+Math.random()*2.5)+"s linear "+Math.random()*.8+"s forwards";document.body.appendChild(e);setTimeout(function(x){x.remove()},6000,e)}}
+function cd(s){var h=Math.floor(s/3600),m=Math.floor(s%3600/60),x=Math.floor(s%60);return bn(String(h).padStart(2,"0")+":"+String(m).padStart(2,"0")+":"+String(x).padStart(2,"0"))}
+function frame(){
+ if(S&&!done){
+  var now=(Date.now()+off)/1000,t=now-S.ends,reel=$("reel"),msg=$("msg");
+  if(S.status==="open"&&t<0){
+   reel.textContent="— — — —";reel.className="reel";msg.textContent="ড্র শুরু হতে বাকি "+cd(-t);
+   if(-t<4&&Date.now()-lastPoll>2000)load();
+  }else if(t<S.spin&&S.status!=="done"||(t<S.spin&&S.winner_num)){
+   reel.className="reel";msg.textContent="স্পিন চলছে… বিজয়ী নম্বর খোঁজা হচ্ছে";
+   if(S.winner_num&&S.sold>0){var x=Math.min(1,Math.max(0,t/S.spin)),e=1-Math.pow(1-x,3),r=Math.floor(R*(1-e));
+    reel.textContent=pad(((S.winner_num-1-r)%S.sold+S.sold)%S.sold+1)}
+   else{reel.textContent=pad(Math.floor(Math.random()*Math.max(1,S.sold))+1);if(Date.now()-lastPoll>1000)load()}
+  }else{
+   if(S.status==="done"||S.status==="drawing"){
+    if(S.winner_num){reel.textContent=pad(S.winner_num);reel.className="reel stop"}
+    if(S.status==="done"){done=true;
+     if(!S.winner_num){reel.textContent="— — — —";msg.textContent="এই ড্র-এ কেউ টিকিট কেনেনি, তাই বিজয়ী নেই।"}
+     else{msg.innerHTML="বিজয়ী টিকিট #"+pad(S.winner_num)+"<br>"+(S.mine?"অভিনন্দন! আপনিই বিজয়ী, পুরস্কার যোগ হয়েছে।":"বিজয়ী: "+S.winner);if(t<S.spin+30)confetti()}
+    }else{msg.textContent="ফলাফল ঘোষণা হচ্ছে…";if(Date.now()-lastPoll>1500)load()}
+   }else{if(Date.now()-lastPoll>1500)load()}
+  }
+ }
+ requestAnimationFrame(frame)}
+load();requestAnimationFrame(frame);
+})();
+</script>
+{% endblock %}
