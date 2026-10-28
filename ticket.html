@@ -1,27 +1,38 @@
 {% extends "base.html" %}
 {% block content %}
-<h2>টিকিট ক্রয়</h2>
-{% if cur %}<div class="seg">{% for r in rows %}<a href="{{ url_for('ticket', d=r.id) }}" class="{{ 'on' if r.id==cur.id }}">{{ r.title }}</a>{% endfor %}</div>
-<div class="tk">
-  <div class="m"><span style="color:var(--pink);font-weight:700">{{ cur.title }}</span><div class="p">{{ cur.prize|m }} পয়েন্ট</div>
-    <div class="prog"><i style="width:{{ cur.sold*100//cur.cap }}%"></i></div>
-    <div class="jinfo">{{ cur.ends|when }} এ ড্র · {{ cur.sold|bn }}/{{ cur.cap|bn }} বিক্রি · আপনার {{ cur.mine|bn }}/{{ MAXT|bn }}</div></div>
-  <div class="cut"></div>
-  <form class="sb" method="post" action="{{ url_for('buy', did=cur.id) }}">
-    <input type="hidden" name="q" id="qv" value="1">
-    <div class="qty"><span>কয়টি টিকিট?</span><div><button type="button" id="mn" aria-label="কমান">−</button><b id="q">১</b><button type="button" id="pl" aria-label="বাড়ান">+</button></div></div>
-    <div class="tot"><span>মোট</span><b id="tot">{{ cur.cost|bn }} পয়েন্ট</b></div>
-    <button class="btn" {{ 'disabled' if cur.mine>=MAXT or cur.sold>=cur.cap }}>{{ 'সীমা শেষ' if cur.mine>=MAXT else 'টিকিট কিনুন' }}</button>
-  </form>
-</div>
-{% else %}<div class="empty">এখন কোনো ড্র চালু নেই। নতুন ড্র শীঘ্রই আসছে।</div>{% endif %}
-<h2>আমার টিকিট</h2>
-<div class="nums">{% for t in mytix %}<div class="nm {{ 'w' if t.status=='done' and t.winner_num==t.num }}"><b>#{{ t.num|pad4 }}</b><span>{{ KL[t.kind] }}</span></div>{% else %}<div class="empty">এখনো কোনো টিকিট নেই।</div>{% endfor %}</div>
-{% if cur %}<script>
-var B="০১২৩৪৫৬৭৮৯",q=1,MAX={{ MAXT - cur.mine }},COST={{ cur.cost }};
-function bn(s){return String(s).replace(/\d/g,function(d){return B[d]})}
-function up(){document.getElementById("q").textContent=bn(q);document.getElementById("qv").value=q;document.getElementById("tot").textContent=bn(q*COST)+" পয়েন্ট"}
-document.getElementById("mn").onclick=function(){if(q>1)q--;up()};
-document.getElementById("pl").onclick=function(){if(q<MAX)q++;up()};
-</script>{% endif %}
+{% if live_d %}<a class="ad" style="background:var(--pink);color:#fff;text-decoration:none;margin:0 0 14px" href="{{ url_for('live', did=live_d.id) }}"><div><b>লাইভ ড্র {{ 'চলছে' if live_d.status=='drawing' else 'শীঘ্রই শুরু' }}</b><small style="opacity:.9">{{ live_d.title }} · দেখতে চাপুন</small></div></a>{% endif %}
+{% if u.unclaimed %}<a class="ad" style="background:var(--sun);text-decoration:none;margin:0 0 14px" href="{{ url_for('winners') }}"><div><b>অভিনন্দন, আপনি জিতেছেন!</b><small>পুরস্কার পেতে আপনার তথ্য জমা দিন</small></div></a>{% endif %}
+{% if d %}<div class="jp">
+  <span class="t">আজকের জ্যাকপট</span>
+  <div class="amt">{{ d.prize|m }}</div>
+  <div class="ringwrap">
+    <div class="ring"><svg width="118" height="118" viewBox="0 0 118 118"><circle cx="59" cy="59" r="52" fill="none" stroke="#EADFCB" stroke-width="10"/><circle id="arc" cx="59" cy="59" r="52" fill="none" stroke="#FF2E7E" stroke-width="10" stroke-linecap="round" stroke-dasharray="326.7" stroke-dashoffset="100"/></svg>
+      <div class="c"><div id="ct">০০:০০:০০</div><span>বাকি</span></div></div>
+    <div class="jinfo">{{ d.ends|when }} এ ড্র<br><b>{{ d.sold|bn }}/{{ d.cap|bn }}</b> টিকিট বিক্রি<div class="prog"><i style="width:{{ d.sold*100//d.cap }}%"></i></div>আপনার <b>{{ d.mine|bn }}</b>/{{ MAXT|bn }} টিকিট</div>
+  </div>
+  <a class="btn" style="display:block;text-align:center" href="{{ url_for('ticket', d=d.id) }}">টিকিট নিন</a>
+  <a class="btn sun" style="display:block;text-align:center;margin-top:10px" href="{{ url_for('live', did=d.id) }}">লাইভ ড্র পেজ</a>
+</div>{% else %}<div class="empty">এখন কোনো ড্র চালু নেই। নতুন ড্র শীঘ্রই আসছে।</div>{% endif %}
+<div class="row2"><div class="st"><b>{{ tcount|bn }}</b><span>মোট টিকিট</span></div><div class="st"><b>{{ u.wins|bn }}</b><span>জয়</span></div></div>
+
+<div class="streak"><b>৭ দিনের স্ট্রিক</b><span class="sub"> · রোজ ঢুকলে বোনাস বাড়ে</span>
+  <div class="days">{% for i in range(1,8) %}{% set today_i = (i==day.done+1 and not day.claimed) %}<div><i class="{{ 'd' if i<=day.done else ('t' if today_i) }}">{{ '✓' if i<=day.done else i|bn }}</i>{{ 'আজ' if today_i else i|bn }}</div>{% endfor %}</div>
+  <form method="post" action="{{ url_for('bonus') }}"><button class="btn sun" {{ 'disabled' if day.claimed }}>{{ 'আজকের বোনাস নেওয়া হয়েছে' if day.claimed else 'আজকের বোনাস নিন +' ~ (day.reward|bn) }}</button></form></div>
+
+<div class="ad"><div><b>বিজ্ঞাপন দেখুন, +{{ AD_REWARD|bn }} পয়েন্ট</b><small>আজ আর {{ ad_left|bn }}টি বাকি</small></div><button class="btn sm" id="ad" {{ 'disabled' if ad_left<=0 }}>দেখুন</button></div>
+
+<script>
+var B="০১২৩৪৫৬৭৮৯";function bn(s){return String(s).replace(/\d/g,function(d){return B[d]})}
+var ENDS={{ d.ends if d else 0 }};
+function tick(){if(!document.getElementById("ct"))return;var s=Math.max(0,ENDS-Math.floor(Date.now()/1000));
+ function p(n){return String(n).padStart(2,"0")}
+ document.getElementById("ct").textContent=bn(p(Math.floor(s/3600))+":"+p(Math.floor(s%3600/60))+":"+p(s%60));
+ document.getElementById("arc").style.strokeDashoffset=326.7*(1-Math.min(1,s/86400))}
+tick();setInterval(tick,1000);
+var ab=document.getElementById("ad");
+ab.onclick=function(){var b=this,n=5;b.disabled=true;b.textContent=bn(n)+"…";
+ var i=setInterval(function(){n--;if(n>0){b.textContent=bn(n)+"…";return}clearInterval(i);
+  fetch("{{ url_for('ad') }}",{method:"POST"}).then(function(r){return r.json()}).then(function(j){
+   if(j.ok){document.getElementById("pts").textContent=bn(j.points);b.textContent="পেয়েছেন ✓";if(j.left>0)setTimeout(function(){b.disabled=false;b.textContent="দেখুন"},1500)}else b.textContent="সীমা শেষ"})},1000)};
+</script>
 {% endblock %}
