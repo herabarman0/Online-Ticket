@@ -97,38 +97,38 @@ def new_user(email, name, pw_hash, ref_code="", phone=""):
         ref.reference.update({"points": firestore.Increment(REF)})
     return r.id
 
-# ---------- draws ----------
+# ---------- draws (admin-created only; no automatic draws) ----------
+SPIN = 60  # seconds of live spin, same moment on every phone
+
 @firestore.transactional
 def _finish_tx(tx, dref):
+    # at the draw time: pick the winner (stored, hidden until the spin ends)
     d = dref.get(transaction=tx).to_dict()
-    if not d or d["status"] != "open":
+    if not d or d["status"] != "open" or d["ends"] > time.time():
         return
     if d["sold"] > 0:
         num = secrets.randbelow(d["sold"]) + 1
         t = dref.collection("tickets").document(str(num)).get(transaction=tx).to_dict()
-        uref = fs.collection("users").document(t["uid"])
-        us = uref.get(transaction=tx)
-        if not us.exists:
-            tx.update(dref, {"status": "done", "winner_num": num})
-            return
-        u = us.to_dict()
-        tx.update(uref, {"points": u["points"] + d["prize"], "wins": u.get("wins", 0) + 1, "unclaimed": u.get("unclaimed", 0) + 1})
-        tx.update(dref, {"status": "done", "winner_num": num, "winner_user": t["uid"]})
-        tx.set(fs.collection("results").document(dref.id), {"uid": t["uid"], "name": u["name"], "title": d["title"],
-               "prize": d["prize"], "winner_num": num, "ends": d["ends"]})
+        tx.update(dref, {"status": "drawing", "winner_num": num, "winner_user": t["uid"]})
     else:
         tx.update(dref, {"status": "done"})
 
-def ensure(ids, kind, title, prize, cost, cap, end_dt):
-    e = int(end_dt.timestamp())
-    did = "%s-%d" % (kind, e)
-    if did in ids:
+@firestore.transactional
+def _award_tx(tx, dref):
+    # after the spin: credit the prize and publish the result
+    d = dref.get(transaction=tx).to_dict()
+    if not d or d["status"] != "drawing" or time.time() < d["ends"] + SPIN:
         return
-    try:
-        fs.collection("draws").document(did).create({"kind": kind, "title": title, "prize": prize, "cost": cost,
-                                                    "cap": cap, "ends": e, "status": "open", "sold": 0})
-    except AlreadyExists:
-        pass
+    uref = fs.collection("users").document(d["winner_user"])
+    us = uref.get(transaction=tx)
+    if not us.exists:
+        tx.update(dref, {"status": "done"})
+        return
+    u = us.to_dict()
+    tx.update(uref, {"points": u["points"] + d["prize"], "wins": u.get("wins", 0) + 1, "unclaimed": u.get("unclaimed", 0) + 1})
+    tx.update(dref, {"status": "done"})
+    tx.set(fs.collection("results").document(dref.id), {"uid": d["winner_user"], "name": u["name"], "title": d["title"],
+           "prize": d["prize"], "winner_num": d["winner_num"], "ends": d["ends"]})
 
 _last = 0.0
 def settle(force=False):
@@ -137,41 +137,22 @@ def settle(force=False):
     if not force and now - _last < 20:
         return
     _last = now
-    ids = set()
-    for s in fs.collection("draws").where("status", "==", "open").stream():
-        if s.to_dict()["ends"] <= now:
+    for s in fs.collection("draws").where("status", "in", ["open", "drawing"]).stream():
+        d = s.to_dict()
+        if d["status"] == "open" and d["ends"] <= now:
             _finish_tx(fs.transaction(), s.reference)
-        else:
-            ids.add(s.id)
-    n = datetime.now(TZ)
-    at = lambda dt, h: dt.replace(hour=h, minute=0, second=0, microsecond=0)
-    day = at(n, 22)
-    if day <= n:
-        day += timedelta(days=1)
-    ensure(ids, "daily", "প্রতিদিনের ড্র", 1000, 10, 500, day)
-    fri = at(n, 19) + timedelta(days=(4 - n.weekday()) % 7)
-    if fri <= n:
-        fri += timedelta(days=7)
-    ensure(ids, "weekly", "সাপ্তাহিক মেগা ড্র", 5000, 25, 1000, fri)
-    mo = at(n.replace(day=monthrange(n.year, n.month)[1]), 20)
-    if mo <= n:
-        nx = (n.replace(day=1) + timedelta(days=32)).replace(day=1)
-        mo = at(nx.replace(day=monthrange(nx.year, nx.month)[1]), 20)
-    ensure(ids, "monthly", "মাসিক গ্র্যান্ড ড্র", 20000, 100, 5000, mo)
+        elif d["status"] == "drawing" and now >= d["ends"] + SPIN:
+            _award_tx(fs.transaction(), s.reference)
 
 def open_draws(uid):
-    for attempt in (0, 1):
-        now, out = time.time(), []
-        for s in fs.collection("draws").where("status", "==", "open").stream():
-            d = snap(s)
-            if d["ends"] > now:
-                out.append(d)
-        if out:
-            break
-        settle(True)
-    out.sort(key=lambda d: KO.get(d["kind"], 9))
+    now, out = time.time(), []
+    for s in fs.collection("draws").where("status", "==", "open").stream():
+        d = snap(s)
+        if d["ends"] > now:
+            out.append(d)
+    out.sort(key=lambda d: d["ends"])
     refs = [fs.collection("draws").document(d["id"]).collection("players").document(uid) for d in out]
-    m = {p.reference.parent.parent.id: (p.to_dict() or {}).get("n", 0) for p in fs.get_all(refs)}
+    m = {p.reference.parent.parent.id: (p.to_dict() or {}).get("n", 0) for p in fs.get_all(refs)} if refs else {}
     for d in out:
         d["mine"] = m.get(d["id"], 0)
     return out
@@ -267,9 +248,15 @@ def streak_info(u):
 def home():
     settle()
     u = me()
-    d = open_draws(u["id"])[0]
+    ds = open_draws(u["id"])
+    d = ds[0] if ds else None
+    live_d = None
+    for x in fs.collection("draws").where("status", "==", "drawing").limit(1).stream():
+        live_d = snap(x)
+    if not live_d and d and d["ends"] - time.time() < 600:
+        live_d = d
     ad_left = AD_MAX - (u.get("ad_n", 0) if u.get("ad_day") == today().isoformat() else 0)
-    return render_template("home.html", u=u, d=d, tcount=u.get("tix", 0), day=streak_info(u), ad_left=ad_left)
+    return render_template("home.html", u=u, d=d, tcount=u.get("tix", 0), day=streak_info(u), ad_left=ad_left, live_d=live_d)
 
 @firestore.transactional
 def _bonus_tx(tx, ref_, t, y):
@@ -314,7 +301,7 @@ def ticket():
     u = me()
     rows = open_draws(u["id"])
     sel = request.args.get("d")
-    cur = next((r for r in rows if r["id"] == sel), rows[0])
+    cur = next((r for r in rows if r["id"] == sel), rows[0] if rows else None)
     return render_template("ticket.html", u=u, rows=rows, cur=cur, mytix=my_tickets(u["id"]))
 
 class Fail(Exception):
@@ -459,6 +446,41 @@ def claim(rid):
             except Fail as e:
                 flash(str(e))
     return render_template("claim.html", u=u, r=r.to_dict(), f=request.form)
+
+# ---------- live draw ----------
+def mask_name(n):
+    return " ".join((w[:2] + "***") for w in (n or "").split())
+
+@app.route("/live/<did>")
+@login_required
+def live(did):
+    s_ = fs.collection("draws").document(did).get()
+    if not s_.exists:
+        abort(404)
+    return render_template("live.html", u=me(), d=snap(s_))
+
+@app.route("/live/<did>/state")
+@login_required
+def live_state(did):
+    dref = fs.collection("draws").document(did)
+    s_ = dref.get()
+    if not s_.exists:
+        abort(404)
+    d, now = s_.to_dict(), time.time()
+    if d["status"] == "open" and d["ends"] <= now:
+        _finish_tx(fs.transaction(), dref)
+        d = dref.get().to_dict()
+    if d["status"] == "drawing" and now >= d["ends"] + SPIN:
+        _award_tx(fs.transaction(), dref)
+        d = dref.get().to_dict()
+    out = dict(now=now, ends=d["ends"], status=d["status"], sold=d["sold"], title=d["title"], prize=d["prize"], spin=SPIN)
+    if d["status"] in ("drawing", "done") and d.get("winner_num"):
+        out["winner_num"] = d["winner_num"]
+    if d["status"] == "done" and d.get("winner_user"):
+        r = fs.collection("results").document(did).get()
+        out["winner"] = mask_name((r.to_dict() or {}).get("name", ""))
+        out["mine"] = d["winner_user"] == me()["id"]
+    return jsonify(out)
 
 # ---------- admin ----------
 def admin_required(f):
@@ -671,11 +693,14 @@ def admin_draw(did):
 @admin_required
 def admin_finish(did):
     dref = fs.collection("draws").document(did)
-    dref.update({"ends": int(time.time()) - 1})
-    _finish_tx(fs.transaction(), dref)
-    alog("draw_finish", draw=did)
-    flash("ড্র শেষ করা হয়েছে।")
-    return redirect(url_for("admin_draw", did=did))
+    s_ = dref.get()
+    if not s_.exists or s_.to_dict()["status"] != "open":
+        flash("এই ড্র আর চালু নেই।")
+        return redirect(url_for("admin_draw", did=did))
+    dref.update({"ends": int(time.time()) + 15})
+    alog("draw_live", draw=did)
+    flash("১৫ সেকেন্ড পরে লাইভ ড্র শুরু হবে।")
+    return redirect(url_for("live", did=did))
 
 @app.route("/admin/claims")
 @admin_required
