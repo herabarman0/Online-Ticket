@@ -1,7 +1,7 @@
 {% extends "base.html" %}
 {% block content %}
 <h2>টিকিট ক্রয়</h2>
-<div class="seg">{% for r in rows %}<a href="{{ url_for('ticket', d=r.id) }}" class="{{ 'on' if r.id==cur.id }}">{{ KL[r.kind] }}</a>{% endfor %}</div>
+{% if cur %}<div class="seg">{% for r in rows %}<a href="{{ url_for('ticket', d=r.id) }}" class="{{ 'on' if r.id==cur.id }}">{{ r.title }}</a>{% endfor %}</div>
 <div class="tk">
   <div class="m"><span style="color:var(--pink);font-weight:700">{{ cur.title }}</span><div class="p">{{ cur.prize|m }} পয়েন্ট</div>
     <div class="prog"><i style="width:{{ cur.sold*100//cur.cap }}%"></i></div>
@@ -14,13 +14,14 @@
     <button class="btn" {{ 'disabled' if cur.mine>=MAXT or cur.sold>=cur.cap }}>{{ 'সীমা শেষ' if cur.mine>=MAXT else 'টিকিট কিনুন' }}</button>
   </form>
 </div>
+{% else %}<div class="empty">এখন কোনো ড্র চালু নেই। নতুন ড্র শীঘ্রই আসছে।</div>{% endif %}
 <h2>আমার টিকিট</h2>
 <div class="nums">{% for t in mytix %}<div class="nm {{ 'w' if t.status=='done' and t.winner_num==t.num }}"><b>#{{ t.num|pad4 }}</b><span>{{ KL[t.kind] }}</span></div>{% else %}<div class="empty">এখনো কোনো টিকিট নেই।</div>{% endfor %}</div>
-<script>
+{% if cur %}<script>
 var B="০১২৩৪৫৬৭৮৯",q=1,MAX={{ MAXT - cur.mine }},COST={{ cur.cost }};
 function bn(s){return String(s).replace(/\d/g,function(d){return B[d]})}
 function up(){document.getElementById("q").textContent=bn(q);document.getElementById("qv").value=q;document.getElementById("tot").textContent=bn(q*COST)+" পয়েন্ট"}
 document.getElementById("mn").onclick=function(){if(q>1)q--;up()};
 document.getElementById("pl").onclick=function(){if(q<MAX)q++;up()};
-</script>
+</script>{% endif %}
 {% endblock %}
