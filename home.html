@@ -1,9 +1,19 @@
 {% extends "base.html" %}
 {% block content %}
 {% if live_d %}<a class="ad" style="background:var(--pink);color:#fff;text-decoration:none;margin:0 0 14px" href="{{ url_for('live', did=live_d.id) }}"><div><b>লাইভ ড্র {{ 'চলছে' if live_d.status=='drawing' else 'শীঘ্রই শুরু' }}</b><small style="opacity:.9">{{ live_d.title }} · দেখতে চাপুন</small></div></a>{% endif %}
-{% if u.unclaimed %}<a class="ad" style="background:var(--sun);text-decoration:none;margin:0 0 14px" href="{{ url_for('winners') }}"><div><b>অভিনন্দন, আপনি জিতেছেন!</b><small>পুরস্কার পেতে আপনার তথ্য জমা দিন</small></div></a>{% endif %}
-{% if d %}<div class="jp">
-  <span class="t">আজকের জ্যাকপট</span>
+{% include "wincards.html" %}
+{% if d %}
+<div class="jp" id="cc" hidden style="background:linear-gradient(135deg,#FF2E7E,#7B2CBF);color:#fff;text-align:center">
+  <span class="t" style="color:#FFE9A8">শীঘ্রই লাইভ ড্র</span>
+  <div style="font-family:Galada,sans-serif;font-size:1.5rem;margin-top:4px;position:relative;z-index:1">{{ d.title }}</div>
+  <div class="jinfo" style="color:#fff;opacity:.9;position:relative;z-index:1">ড্র শুরু হতে বাকি</div>
+  <div id="cc2" style="font-family:Galada,sans-serif;font-size:4.6rem;line-height:1.1;position:relative;z-index:1;font-variant-numeric:tabular-nums">০০:০০</div>
+  <div class="jinfo" style="color:#fff;opacity:.9;position:relative;z-index:1">পুরস্কার {{ d.prize|m }} পয়েন্ট · {{ d.sold|bn }} টিকিট বিক্রি</div>
+  <a class="btn sun" style="display:block;margin-top:12px;position:relative;z-index:1" href="{{ url_for('live', did=d.id) }}">লাইভ ড্র দেখুন</a>
+  <a class="btn" style="display:block;margin-top:8px;position:relative;z-index:1;background:rgba(0,0,0,.3)" href="{{ url_for('ticket', d=d.id) }}">টিকিট নিন</a>
+</div>
+<div class="jp" id="cn">
+  <span class="t">{{ d.title }}</span>
   <div class="amt">{{ d.prize|m }}</div>
   <div class="ringwrap">
     <div class="ring"><svg width="118" height="118" viewBox="0 0 118 118"><circle cx="59" cy="59" r="52" fill="none" stroke="#EADFCB" stroke-width="10"/><circle id="arc" cx="59" cy="59" r="52" fill="none" stroke="#FF2E7E" stroke-width="10" stroke-linecap="round" stroke-dasharray="326.7" stroke-dashoffset="100"/></svg>
@@ -12,7 +22,8 @@
   </div>
   <a class="btn" style="display:block;text-align:center" href="{{ url_for('ticket', d=d.id) }}">টিকিট নিন</a>
   <a class="btn sun" style="display:block;text-align:center;margin-top:10px" href="{{ url_for('live', did=d.id) }}">লাইভ ড্র পেজ</a>
-</div>{% else %}<div class="empty">এখন কোনো ড্র চালু নেই। নতুন ড্র শীঘ্রই আসছে।</div>{% endif %}
+</div>
+{% elif not last and not live_d %}<div class="empty">এখন কোনো ড্র চালু নেই। নতুন ড্র শীঘ্রই আসছে।</div>{% endif %}
 <div class="row2"><div class="st"><b>{{ tcount|bn }}</b><span>মোট টিকিট</span></div><div class="st"><b>{{ u.wins|bn }}</b><span>জয়</span></div></div>
 
 <div class="streak"><b>৭ দিনের স্ট্রিক</b><span class="sub"> · রোজ ঢুকলে বোনাস বাড়ে</span>
@@ -23,11 +34,14 @@
 
 <script>
 var B="০১২৩৪৫৬৭৮৯";function bn(s){return String(s).replace(/\d/g,function(d){return B[d]})}
-var ENDS={{ d.ends if d else 0 }};
-function tick(){if(!document.getElementById("ct"))return;var s=Math.max(0,ENDS-Math.floor(Date.now()/1000));
- function p(n){return String(n).padStart(2,"0")}
- document.getElementById("ct").textContent=bn(p(Math.floor(s/3600))+":"+p(Math.floor(s%3600/60))+":"+p(s%60));
- document.getElementById("arc").style.strokeDashoffset=326.7*(1-Math.min(1,s/86400))}
+var ENDS={{ d.ends if d else 0 }},OFF={{ now }}*1000-Date.now(),WENT=false;
+function nowS(){return(Date.now()+OFF)/1000}
+function tick(){if(!ENDS)return;var s=Math.max(0,ENDS-nowS());function p(n){return String(Math.floor(n)).padStart(2,"0")}
+ var ct=document.getElementById("ct");
+ if(ct){ct.textContent=bn(p(s/3600)+":"+p(s%3600/60)+":"+p(s%60));document.getElementById("arc").style.strokeDashoffset=326.7*(1-Math.min(1,s/86400))}
+ var cc=document.getElementById("cc"),cn=document.getElementById("cn");
+ if(cc&&cn){var near=s<=600;cc.hidden=!near;cn.hidden=near;if(near)document.getElementById("cc2").textContent=bn(p(s/60)+":"+p(s%60))}
+ if(s<=0&&!WENT&&cc){WENT=true;location.href="{{ url_for('live', did=d.id) if d else '' }}"}}
 tick();setInterval(tick,1000);
 var ab=document.getElementById("ad");
 ab.onclick=function(){var b=this,n=5;b.disabled=true;b.textContent=bn(n)+"…";
