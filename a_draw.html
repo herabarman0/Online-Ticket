@@ -1,14 +1,17 @@
 {% extends "a_base.html" %}
-{% block title %}{{ d.title }}{% endblock %}
+{% block title %}ড্র ও টিকিট{% endblock %}
 {% block content %}
-<div class="hd"><div><a class="mut sm" href="{{ url_for('admin_draws') }}">← সব ড্র</a><h1>{{ d.title }}</h1><a class="bt sm gd" href="{{ url_for('live', did=d.id) }}">লাইভ পেজ দেখুন</a></div>
-{% if d.status=='open' %}<form method="post" action="{{ url_for('admin_finish', did=d.id) }}" onsubmit="return confirm('১৫ সেকেন্ড পরে সবার ফোনে লাইভ ড্র শুরু হবে। নিশ্চিত?')"><button class="bt pk">এখনই লাইভ ড্র শুরু করুন</button></form>{% endif %}</div>
-<div class="g">
-  <div class="stat hl"><b>{{ d.prize|m }}</b><span>পুরস্কার</span></div><div class="stat"><b>{{ d.sold|bn }}/{{ d.cap|bn }}</b><span>টিকিট বিক্রি</span></div>
-  <div class="stat"><b>{{ d.cost|bn }}</b><span>টিকিটের দাম</span></div>
-  <div class="stat"><b>{% if d.status=='open' %}চলছে{% elif d.winner_num %}#{{ d.winner_num|pad4 }}{% else %}বিজয়ী নেই{% endif %}</b><span>{{ 'অবস্থা' if d.status=='open' else 'বিজয়ী টিকিট' }}</span></div></div>
-<div class="card"><h2>টিকিটের তালিকা (সিরিয়াল অনুযায়ী, প্রথম ২০০টি)</h2><div class="sc"><table class="rt"><thead><tr><th>সিরিয়াল</th><th>ইউজার</th><th>ইমেইল</th><th>ফোন</th></tr></thead><tbody>
-{% for t in tix %}<tr><td data-l="সিরিয়াল"><b>#{{ t.num|pad4 }}</b>{% if d.winner_num==t.num %} <span class="bd gold">বিজয়ী</span>{% endif %}</td>
-  <td data-l="ইউজার"><a href="{{ url_for('admin_user', uid=t.uid) }}">{{ t.user.get('name','(মুছে গেছে)') }}</a></td><td data-l="ইমেইল">{{ t.user.get('email','—') }}</td><td data-l="ফোন">{{ t.user.get('phone') or '—' }}</td></tr>
-{% else %}<tr><td>এখনো কোনো টিকিট বিক্রি হয়নি</td></tr>{% endfor %}</tbody></table></div></div>
+<div class="hd"><h1>ড্র ও টিকিট</h1></div>
+<div class="card"><h2>নতুন ড্র তৈরি করুন</h2><p class="mut sm">ড্র নিজে থেকে তৈরি হয় না। দাম, পুরস্কার ও সময় আপনি ঠিক করবেন। সময় হলে সবার ফোনে ১ মিনিটের লাইভ স্পিন চলবে।</p>
+<form method="post" action="{{ url_for('admin_draw_new') }}"><div class="row">
+  <div><label for="t">নাম</label><input id="t" name="title" required maxlength="60"></div>
+  <div><label for="pz">পুরস্কার (পয়েন্ট)</label><input id="pz" name="prize" required inputmode="numeric"></div>
+  <div><label for="c">টিকিটের দাম (পয়েন্ট)</label><input id="c" name="cost" required inputmode="numeric"></div>
+  <div><label for="cp">মোট টিকিট</label><input id="cp" name="cap" required inputmode="numeric"></div>
+  <div><label for="e">শেষ সময়</label><input id="e" name="ends" type="datetime-local" required></div>
+  <button class="bt pk">তৈরি করুন</button></div></form></div>
+<div class="card"><div class="sc"><table class="rt"><thead><tr><th>ড্র</th><th>ধরন</th><th>পুরস্কার</th><th>বিক্রি</th><th>শেষ সময়</th><th>অবস্থা</th><th></th></tr></thead><tbody>
+{% for d in rows %}<tr><td data-l="ড্র">{{ d.title }}</td><td data-l="ধরন">{{ KL.get(d.kind, d.kind) }}</td><td data-l="পুরস্কার">{{ d.prize|m }}</td><td data-l="বিক্রি">{{ d.sold|bn }}/{{ d.cap|bn }}</td><td data-l="শেষ সময়">{{ d.ends|when }}</td>
+  <td data-l="অবস্থা">{% if d.status=='open' %}<span class="bd ok">চলছে</span>{% else %}<span class="bd mu">শেষ</span>{% endif %}</td><td class="r"><a class="bt sm gh" href="{{ url_for('admin_draw', did=d.id) }}">খুলুন</a></td></tr>
+{% else %}<tr><td>কোনো ড্র নেই</td></tr>{% endfor %}</tbody></table></div></div>
 {% endblock %}
