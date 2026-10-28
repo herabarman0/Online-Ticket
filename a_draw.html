@@ -1,8 +1,8 @@
 {% extends "a_base.html" %}
 {% block title %}{{ d.title }}{% endblock %}
 {% block content %}
-<div class="hd"><div><a class="mut sm" href="{{ url_for('admin_draws') }}">← সব ড্র</a><h1>{{ d.title }}</h1></div>
-{% if d.status=='open' %}<form method="post" action="{{ url_for('admin_finish', did=d.id) }}" onsubmit="return confirm('এখনই ড্র করে বিজয়ী ঠিক করবেন?')"><button class="bt pk">এখনই ড্র করুন</button></form>{% endif %}</div>
+<div class="hd"><div><a class="mut sm" href="{{ url_for('admin_draws') }}">← সব ড্র</a><h1>{{ d.title }}</h1><a class="bt sm gd" href="{{ url_for('live', did=d.id) }}">লাইভ পেজ দেখুন</a></div>
+{% if d.status=='open' %}<form method="post" action="{{ url_for('admin_finish', did=d.id) }}" onsubmit="return confirm('১৫ সেকেন্ড পরে সবার ফোনে লাইভ ড্র শুরু হবে। নিশ্চিত?')"><button class="bt pk">এখনই লাইভ ড্র শুরু করুন</button></form>{% endif %}</div>
 <div class="g">
   <div class="stat hl"><b>{{ d.prize|m }}</b><span>পুরস্কার</span></div><div class="stat"><b>{{ d.sold|bn }}/{{ d.cap|bn }}</b><span>টিকিট বিক্রি</span></div>
   <div class="stat"><b>{{ d.cost|bn }}</b><span>টিকিটের দাম</span></div>
