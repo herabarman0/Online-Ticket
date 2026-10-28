@@ -8,6 +8,7 @@
   {% for m in get_flashed_messages() %}<div class="fl" role="alert">{{ m }}</div>{% endfor %}
   <form class="f" method="post">
     {% if mode=='signup' %}<label for="name">নাম</label><input id="name" name="name" required maxlength="40" autocomplete="name">{% endif %}
+    {% if mode=='signup' %}<label for="phone">মোবাইল নম্বর</label><input id="phone" name="phone" required inputmode="tel" placeholder="০১৭XXXXXXXX" autocomplete="tel">{% endif %}
     <label for="email">ইমেইল</label><input id="email" name="email" type="email" required autocomplete="email">
     <label for="pw">পাসওয়ার্ড</label><input id="pw" name="pw" type="password" required minlength="6" autocomplete="{{ 'new-password' if mode=='signup' else 'current-password' }}">
     {% if mode=='signup' %}<label for="ref">রেফার কোড (থাকলে)</label><input id="ref" name="ref" value="{{ ref }}" maxlength="12">{% endif %}
