@@ -139,6 +139,8 @@ def settle(force=False):
     _last = now
     for s in fs.collection("draws").where("status", "in", ["open", "drawing"]).stream():
         d = s.to_dict()
+        if d.get("kind") != "custom":
+            continue  # old automatic draws are ignored; admin can cancel them
         if d["status"] == "open" and d["ends"] <= now:
             _finish_tx(fs.transaction(), s.reference)
         elif d["status"] == "drawing" and now >= d["ends"] + SPIN:
@@ -148,7 +150,7 @@ def open_draws(uid):
     now, out = time.time(), []
     for s in fs.collection("draws").where("status", "==", "open").stream():
         d = snap(s)
-        if d["ends"] > now:
+        if d["ends"] > now and d.get("kind") == "custom":
             out.append(d)
     out.sort(key=lambda d: d["ends"])
     refs = [fs.collection("draws").document(d["id"]).collection("players").document(uid) for d in out]
@@ -164,8 +166,32 @@ def my_tickets(uid):
     info = {s.id: (s.to_dict() or {}) for s in fs.get_all([fs.collection("draws").document(i) for i in ids])} if ids else {}
     for t in docs:
         x = info.get(t["draw"], {})
-        t["status"], t["winner_num"] = x.get("status", ""), x.get("winner_num")
+        t["status"], t["winner_num"], t["title"] = x.get("status", ""), x.get("winner_num"), x.get("title", "")
     return docs
+
+def my_wins(uid):
+    # prizes this user won whose details form is not finished yet
+    rs = [snap(x) for x in fs.collection("results").where("uid", "==", uid).limit(20).stream()]
+    if not rs:
+        return []
+    cl = {x.id: (x.to_dict() or {}) for x in fs.get_all([fs.collection("claims").document(r["id"]) for r in rs]) if x.exists}
+    out = []
+    for r in sorted(rs, key=lambda r: -r["ends"]):
+        c = cl.get(r["id"])
+        if c is None:
+            r["state"] = "need"
+        elif c.get("status") == "pending":
+            r["state"] = "wait"
+        else:
+            continue
+        out.append(r)
+    return out
+
+def last_result():
+    for x in fs.collection("results").order_by("ends", direction=DESC).limit(1).stream():
+        r = snap(x)
+        r["mname"] = mask_name(r.get("name", ""))
+        return r
 
 # ---------- auth ----------
 @app.route("/r/<code>")
@@ -251,12 +277,15 @@ def home():
     ds = open_draws(u["id"])
     d = ds[0] if ds else None
     live_d = None
-    for x in fs.collection("draws").where("status", "==", "drawing").limit(1).stream():
-        live_d = snap(x)
+    for x in fs.collection("draws").where("status", "==", "drawing").limit(3).stream():
+        if (x.to_dict() or {}).get("kind") == "custom":
+            live_d = snap(x)
     if not live_d and d and d["ends"] - time.time() < 600:
         live_d = d
+    last = None if (d or live_d) else last_result()
     ad_left = AD_MAX - (u.get("ad_n", 0) if u.get("ad_day") == today().isoformat() else 0)
-    return render_template("home.html", u=u, d=d, tcount=u.get("tix", 0), day=streak_info(u), ad_left=ad_left, live_d=live_d)
+    return render_template("home.html", u=u, d=d, tcount=u.get("tix", 0), day=streak_info(u), ad_left=ad_left,
+                           live_d=live_d, last=last, wins=my_wins(u["id"]), now=time.time())
 
 @firestore.transactional
 def _bonus_tx(tx, ref_, t, y):
@@ -302,7 +331,8 @@ def ticket():
     rows = open_draws(u["id"])
     sel = request.args.get("d")
     cur = next((r for r in rows if r["id"] == sel), rows[0] if rows else None)
-    return render_template("ticket.html", u=u, rows=rows, cur=cur, mytix=my_tickets(u["id"]))
+    return render_template("ticket.html", u=u, rows=rows, cur=cur, mytix=my_tickets(u["id"]),
+                           last=(None if rows else last_result()), wins=my_wins(u["id"]), now=time.time())
 
 class Fail(Exception):
     pass
@@ -701,6 +731,36 @@ def admin_finish(did):
     alog("draw_live", draw=did)
     flash("১৫ সেকেন্ড পরে লাইভ ড্র শুরু হবে।")
     return redirect(url_for("live", did=did))
+
+@firestore.transactional
+def _cancel_tx(tx, dref):
+    d = dref.get(transaction=tx).to_dict()
+    if not d or d["status"] != "open":
+        return None
+    tx.update(dref, {"status": "cancelled"})
+    return d
+
+@app.post("/admin/draw/<did>/cancel")
+@admin_required
+def admin_cancel(did):
+    dref = fs.collection("draws").document(did)
+    d = _cancel_tx(fs.transaction(), dref)
+    if not d:
+        flash("এই ড্র বাতিল করা যায় না।")
+        return redirect(url_for("admin_draw", did=did))
+    per = {}
+    for t in dref.collection("tickets").stream():
+        x = t.to_dict()
+        per.setdefault(x["uid"], []).append(x["num"])
+    for uid, nums in per.items():
+        uref = fs.collection("users").document(uid)
+        if uref.get().exists:
+            uref.update({"points": firestore.Increment(len(nums) * d["cost"]), "tix": firestore.Increment(-len(nums))})
+            for n in nums:
+                uref.collection("tickets").document("%s_%d" % (did, n)).delete()
+    alog("draw_cancel", draw=did, refunded=sum(len(v) for v in per.values()) * d["cost"])
+    flash("ড্র বাতিল হয়েছে, সবার পয়েন্ট ফেরত দেওয়া হয়েছে।")
+    return redirect(url_for("admin_draws"))
 
 @app.route("/admin/claims")
 @admin_required
