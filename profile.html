@@ -10,7 +10,7 @@
 <dt style="color:var(--soft)">ইমেইল</dt><dd style="margin:0">{{ u.email }}</dd><dt style="color:var(--soft)">মোবাইল</dt><dd style="margin:0">{{ (u.phone or '—')|bn }}</dd>
 <dt style="color:var(--soft)">ঠিকানা</dt><dd style="margin:0">{{ u.addr or '—' }}</dd><dt style="color:var(--soft)">বয়স</dt><dd style="margin:0">{{ u.age|bn if u.age else '—' }}</dd>
 <dt style="color:var(--soft)">ফেসবুক</dt><dd style="margin:0">{{ u.fb or '—' }}</dd><dt style="color:var(--soft)">অবস্থা</dt><dd style="margin:0">{{ 'পেন্ডিং' if pend else 'অ্যাপ্রুভড' }}</dd>
-<dt style="color:var(--soft)">পয়েন্টের মূল্য</dt><dd style="margin:0">৳{{ u.points|taka }} <small style="color:var(--soft)">(শুধু দেখার জন্য)</small></dd></dl></div>
+<dt style="color:var(--soft)">পয়েন্টের মূল্য</dt><dd style="margin:0">৳{{ u.points|taka }}</dd></dl></div>
 {% if not (u.addr and u.age and u.fb) %}<form class="f" method="post" action="{{ url_for('profile_info') }}" style="margin:12px 0"><b>আপনার বাকি তথ্য দিন</b><br>
 <label for="ad">পুরো ঠিকানা</label><input id="ad" name="address" required maxlength="200" value="{{ u.addr or '' }}">
 <label for="ag">বয়স</label><input id="ag" name="age" required inputmode="numeric" value="{{ u.age or '' }}">
