@@ -2,9 +2,9 @@
 {% block content %}
 <h2>টিকিট ক্রয়</h2>
 {% include "wincards.html" %}
-{% if cur %}<div class="seg">{% for r in rows %}<a href="{{ url_for('ticket', d=r.id) }}" class="{{ 'on' if r.id==cur.id }}">{{ r.title }}</a>{% endfor %}</div>
+{% if cur %}<div class="seg">{% for r in rows %}<a href="{{ url_for('ticket', d=r.id) }}" class="{{ 'on' if r.id==cur.id }}">{{ r.title|keep }}</a>{% endfor %}</div>
 <div class="tk">
-  <div class="m"><span style="color:var(--pink);font-weight:700">{{ cur.title }}</span><div class="p">{{ cur.prize|m }} পয়েন্ট</div>{% if cur.prizes and cur.prizes|length>1 %}<small>{{ cur|prizeline }}</small>{% endif %}
+  <div class="m"><span style="color:var(--pink);font-weight:700">{{ cur.title|keep }}</span><div class="p">{{ cur.prize|m }} পয়েন্ট</div>{% if cur.prizes and cur.prizes|length>1 %}<small>{{ cur|prizeline }}</small>{% endif %}
     <div class="prog"><i style="width:{{ cur.sold*100//cur.cap }}%"></i></div>
     <div class="jinfo">{{ cur.ends|when }} এ ড্র · {{ cur.sold|bn }}/{{ cur.cap|bn }} বিক্রি · আপনার {{ cur.mine|bn }}/{{ MAXT|bn }}</div></div>
   <div class="cut"></div>
@@ -17,7 +17,7 @@
 </div>
 {% elif not last %}<div class="empty">এখন কোনো ড্র চালু নেই। নতুন ড্র শীঘ্রই আসছে।</div>{% endif %}
 <h2>আমার টিকিট</h2>
-<div class="nums">{% for t in mytix %}{% set won = (t.status=='done' and t.winner_num==t.num) %}<div class="nm {{ 'w' if won }}"><b>#{{ t.num|pad4 }}</b><span>{{ 'বিজয়ী ★ ' if won }}{{ t.title or KL.get(t.kind, '') }}</span></div>{% else %}<div class="empty">এখনো কোনো টিকিট নেই।</div>{% endfor %}</div>
+<div class="nums">{% for t in mytix %}{% set won = (t.status=='done' and t.winner_num==t.num) %}<div class="nm {{ 'w' if won }}"><b>#{{ t.num|pad4 }}</b><span>{{ 'বিজয়ী ★ ' if won }}{{ (t.title|keep) if t.title else KL.get(t.kind, '') }}</span></div>{% else %}<div class="empty">এখনো কোনো টিকিট নেই।</div>{% endfor %}</div>
 {% if cur %}<script>
 var B="০১২৩৪৫৬৭৮৯",q=1,MAX={{ MAXT - cur.mine }},COST={{ cur.cost }};
 function bn(s){return String(s).replace(/\d/g,function(d){return B[d]})}
