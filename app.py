@@ -51,6 +51,24 @@ def pad4(v):
 def when(ts):
     return bn(datetime.fromtimestamp(ts, TZ).strftime("%d/%m, %I:%M %p"))
 
+# ---- tiny in-process cache (keeps Firestore reads low; single gunicorn worker) ----
+_C = {}
+def cget(k, ttl, fn):
+    e = _C.get(k)
+    if e and time.time() - e[0] < ttl:
+        return e[1]
+    v = fn()
+    _C[k] = (time.time(), v)
+    return v
+
+def cdrop(*ks):
+    for k in ks:
+        if k.endswith("*"):
+            for x in [x for x in _C if x.startswith(k[:-1])]:
+                _C.pop(x, None)
+        else:
+            _C.pop(k, None)
+
 def snap(s):
     x = s.to_dict() or {}
     x["id"] = s.id
@@ -92,9 +110,10 @@ def new_user(email, name, pw_hash, ref_code="", phone=""):
             ref = s
     r = fs.collection("users").document()
     r.set({"email": email, "name": name, "pw": pw_hash, "points": SIGNUP, "code": secrets.token_hex(3).upper(),
-           "ref_by": ref.id if ref else None, "phone": phone, "created": time.time(), "banned": False, "last_bonus": "", "wins": 0, "tix": 0, "streak": 0, "ad_day": "", "ad_n": 0})
+           "ref_by": ref.id if ref else None, "phone": phone, "created": time.time(), "banned": False, "last_bonus": "", "wins": 0, "tix": 0, "streak": 0, "ad_day": "", "ad_n": 0,
+           "wl": [], "tk": [], "mine": {}, "refs": 0})
     if ref:
-        ref.reference.update({"points": firestore.Increment(REF)})
+        ref.reference.update({"points": firestore.Increment(REF), "refs": firestore.Increment(1)})
     return r.id
 
 # ---------- draws (admin-created only; no automatic draws) ----------
@@ -125,73 +144,91 @@ def _award_tx(tx, dref):
         tx.update(dref, {"status": "done"})
         return
     u = us.to_dict()
-    tx.update(uref, {"points": u["points"] + d["prize"], "wins": u.get("wins", 0) + 1, "unclaimed": u.get("unclaimed", 0) + 1})
-    tx.update(dref, {"status": "done"})
+    upd = {"points": u["points"] + d["prize"], "wins": u.get("wins", 0) + 1}
+    if "wl" in u or u.get("wins", 0) == 0:  # pending-prize list lives on the user doc (no extra reads later)
+        upd["wl"] = (u.get("wl") or []) + [{"id": dref.id, "title": d["title"], "prize": d["prize"],
+                                            "winner_num": d["winner_num"], "ends": d["ends"], "state": "need"}]
+    tx.update(uref, upd)
+    tx.update(dref, {"status": "done", "winner_name": u["name"]})
     tx.set(fs.collection("results").document(dref.id), {"uid": d["winner_user"], "name": u["name"], "title": d["title"],
            "prize": d["prize"], "winner_num": d["winner_num"], "ends": d["ends"]})
 
-_last = 0.0
+def active():
+    # open / drawing admin draws: ONE query per 30s for the whole site
+    def load():
+        return [snap(s) for s in fs.collection("draws").where("status", "in", ["open", "drawing"]).stream()
+                if (s.to_dict() or {}).get("kind") == "custom"]
+    return cget("act", 30, load)
+
+def draw_get(did):
+    e = _C.get("dr:" + did)
+    if e and (e[1] and e[1]["status"] in ("done", "cancelled") or time.time() - e[0] < 15):
+        return e[1]
+    s = fs.collection("draws").document(did).get()
+    v = snap(s) if s.exists else None
+    _C["dr:" + did] = (time.time(), v)
+    return v
+
+def changed(did=None):
+    cdrop("act", "last", "res", "board:*")
+    if did:
+        cdrop("dr:" + did)
+
 def settle(force=False):
-    global _last
-    now = time.time()
-    if not force and now - _last < 20:
-        return
-    _last = now
-    for s in fs.collection("draws").where("status", "in", ["open", "drawing"]).stream():
-        d = s.to_dict()
-        if d.get("kind") != "custom":
-            continue  # old automatic draws are ignored; admin can cancel them
+    now, ch = time.time(), False
+    for d in active():
+        dref = fs.collection("draws").document(d["id"])
         if d["status"] == "open" and d["ends"] <= now:
-            _finish_tx(fs.transaction(), s.reference)
+            _finish_tx(fs.transaction(), dref)
+            ch = True
         elif d["status"] == "drawing" and now >= d["ends"] + SPIN:
-            _award_tx(fs.transaction(), s.reference)
+            _award_tx(fs.transaction(), dref)
+            ch = True
+        if ch:
+            changed(d["id"])
 
-def open_draws(uid):
-    now, out = time.time(), []
-    for s in fs.collection("draws").where("status", "==", "open").stream():
-        d = snap(s)
-        if d["ends"] > now and d.get("kind") == "custom":
-            out.append(d)
+def open_draws(u):
+    now, mine = time.time(), u.get("mine") or {}
+    out = [dict(d) for d in active() if d["status"] == "open" and d["ends"] > now]
     out.sort(key=lambda d: d["ends"])
-    refs = [fs.collection("draws").document(d["id"]).collection("players").document(uid) for d in out]
-    m = {p.reference.parent.parent.id: (p.to_dict() or {}).get("n", 0) for p in fs.get_all(refs)} if refs else {}
     for d in out:
-        d["mine"] = m.get(d["id"], 0)
+        d["mine"] = mine.get(d["id"], 0)
     return out
 
-def my_tickets(uid):
-    docs = [s.to_dict() for s in fs.collection("users").document(uid).collection("tickets")
-            .order_by("ts", direction=DESC).limit(12).stream()]
-    ids = list({t["draw"] for t in docs})
-    info = {s.id: (s.to_dict() or {}) for s in fs.get_all([fs.collection("draws").document(i) for i in ids])} if ids else {}
-    for t in docs:
-        x = info.get(t["draw"], {})
-        t["status"], t["winner_num"], t["title"] = x.get("status", ""), x.get("winner_num"), x.get("title", "")
-    return docs
-
-def my_wins(uid):
-    # prizes this user won whose details form is not finished yet
-    rs = [snap(x) for x in fs.collection("results").where("uid", "==", uid).limit(20).stream()]
-    if not rs:
-        return []
-    cl = {x.id: (x.to_dict() or {}) for x in fs.get_all([fs.collection("claims").document(r["id"]) for r in rs]) if x.exists}
+def my_tickets(u):
     out = []
-    for r in sorted(rs, key=lambda r: -r["ends"]):
-        c = cl.get(r["id"])
-        if c is None:
-            r["state"] = "need"
-        elif c.get("status") == "pending":
-            r["state"] = "wait"
-        else:
-            continue
-        out.append(r)
+    for t in (u.get("tk") or [])[:12]:
+        t = dict(t)
+        x = draw_get(t["draw"]) or {}
+        t["status"], t["winner_num"] = x.get("status", ""), x.get("winner_num")
+        t["title"] = x.get("title") or t.get("title", "")
+        out.append(t)
     return out
+
+def my_wins(u):
+    # prizes this user won whose details are not yet delivered (stored on the user doc: zero extra reads)
+    if "wl" not in u:
+        wl = []
+        if u.get("wins", 0) > 0:  # one-time migration for accounts made before this change
+            rs = [snap(x) for x in fs.collection("results").where("uid", "==", u["id"]).limit(20).stream()]
+            cl = {x.id: (x.to_dict() or {}) for x in fs.get_all([fs.collection("claims").document(r["id"]) for r in rs]) if x.exists} if rs else {}
+            for r in sorted(rs, key=lambda r: -r["ends"]):
+                c = cl.get(r["id"])
+                if c is None:
+                    wl.append(dict(id=r["id"], title=r["title"], prize=r["prize"], winner_num=r["winner_num"], ends=r["ends"], state="need"))
+                elif c.get("status") == "pending":
+                    wl.append(dict(id=r["id"], title=r["title"], prize=r["prize"], winner_num=r["winner_num"], ends=r["ends"], state="wait"))
+        fs.collection("users").document(u["id"]).update({"wl": wl})
+        u["wl"] = wl
+    return sorted(u["wl"], key=lambda r: -r["ends"])
 
 def last_result():
-    for x in fs.collection("results").order_by("ends", direction=DESC).limit(1).stream():
-        r = snap(x)
-        r["mname"] = mask_name(r.get("name", ""))
-        return r
+    def load():
+        for x in fs.collection("results").order_by("ends", direction=DESC).limit(1).stream():
+            r = snap(x)
+            r["mname"] = mask_name(r.get("name", ""))
+            return r
+    return cget("last", 60, load)
 
 # ---------- auth ----------
 @app.route("/r/<code>")
@@ -274,18 +311,15 @@ def streak_info(u):
 def home():
     settle()
     u = me()
-    ds = open_draws(u["id"])
+    ds = open_draws(u)
     d = ds[0] if ds else None
-    live_d = None
-    for x in fs.collection("draws").where("status", "==", "drawing").limit(3).stream():
-        if (x.to_dict() or {}).get("kind") == "custom":
-            live_d = snap(x)
+    live_d = next((dict(x) for x in active() if x["status"] == "drawing"), None)
     if not live_d and d and d["ends"] - time.time() < 600:
         live_d = d
     last = None if (d or live_d) else last_result()
     ad_left = AD_MAX - (u.get("ad_n", 0) if u.get("ad_day") == today().isoformat() else 0)
     return render_template("home.html", u=u, d=d, tcount=u.get("tix", 0), day=streak_info(u), ad_left=ad_left,
-                           live_d=live_d, last=last, wins=my_wins(u["id"]), now=time.time())
+                           live_d=live_d, last=last, wins=my_wins(u), now=time.time(), notes=notices_now())
 
 @firestore.transactional
 def _bonus_tx(tx, ref_, t, y):
@@ -328,39 +362,40 @@ def ad():
 def ticket():
     settle()
     u = me()
-    rows = open_draws(u["id"])
+    rows = open_draws(u)
     sel = request.args.get("d")
     cur = next((r for r in rows if r["id"] == sel), rows[0] if rows else None)
-    return render_template("ticket.html", u=u, rows=rows, cur=cur, mytix=my_tickets(u["id"]),
-                           last=(None if rows else last_result()), wins=my_wins(u["id"]), now=time.time())
+    return render_template("ticket.html", u=u, rows=rows, cur=cur, mytix=my_tickets(u),
+                           last=(None if rows else last_result()), wins=my_wins(u), now=time.time())
 
 class Fail(Exception):
     pass
 
 @firestore.transactional
-def _buy_tx(tx, uref, dref, pref, q, now):
+def _buy_tx(tx, uref, dref, q, now, keep):
     u = uref.get(transaction=tx).to_dict()
     ds = dref.get(transaction=tx)
-    p = pref.get(transaction=tx)
     if not ds.exists:
         raise Fail("এই ড্র আর চালু নেই।")
     d = ds.to_dict()
-    mine = (p.to_dict() or {}).get("n", 0) if p.exists else 0
+    mine = dict(u.get("mine") or {})
+    have = mine.get(dref.id, 0)
     if d["status"] != "open" or d["ends"] <= now:
         raise Fail("এই ড্র আর চালু নেই।")
-    if mine + q > MAXT or d["sold"] + q > d["cap"]:
+    if have + q > MAXT or d["sold"] + q > d["cap"]:
         raise Fail("টিকিটের সীমা পেরিয়ে যাবে।")
     cost = q * d["cost"]
     if u["points"] < cost:
         raise Fail("পয়েন্ট কম আছে। বোনাস নিন বা রেফার করুন।")
+    tk = list(u.get("tk") or [])
     for i in range(q):
         num = d["sold"] + 1 + i
         tx.set(dref.collection("tickets").document(str(num)), {"uid": uref.id, "num": num})
-        tx.set(uref.collection("tickets").document("%s_%d" % (dref.id, num)),
-               {"draw": dref.id, "kind": d["kind"], "num": num, "ts": time.time()})
+        tk.insert(0, {"draw": dref.id, "kind": d["kind"], "num": num, "ts": now, "title": d["title"]})
+    mine = {k: v for k, v in mine.items() if k in keep}
+    mine[dref.id] = have + q
     tx.update(dref, {"sold": d["sold"] + q})
-    tx.set(pref, {"n": mine + q})
-    tx.update(uref, {"points": u["points"] - cost, "tix": u.get("tix", 0) + q})
+    tx.update(uref, {"points": u["points"] - cost, "tix": u.get("tix", 0) + q, "tk": tk[:60], "mine": mine})
 
 @app.post("/buy/<did>")
 @login_required
@@ -369,7 +404,8 @@ def buy(did):
     uref = fs.collection("users").document(me()["id"])
     dref = fs.collection("draws").document(did)
     try:
-        _buy_tx(fs.transaction(), uref, dref, dref.collection("players").document(uref.id), q, time.time())
+        _buy_tx(fs.transaction(), uref, dref, q, time.time(), {x["id"] for x in active()})
+        cdrop("act", "dr:" + did)
         flash("%sটি টিকিট পেয়েছেন।" % bn(q))
     except Fail as e:
         flash(str(e))
@@ -381,26 +417,26 @@ def board():
     by = request.args.get("by", "points")
     by = by if by in ("points", "tickets", "wins") else "points"
     col = {"points": "points", "tickets": "tix", "wins": "wins"}[by]
-    rows = [snap(s) for s in fs.collection("users").order_by(col, direction=DESC).limit(25).stream()]
+    rows = cget("board:" + by, 60, lambda: [snap(s) for s in fs.collection("users").order_by(col, direction=DESC).limit(25).stream()])
     return render_template("board.html", u=me(), rows=rows, by=by)
 
 @app.route("/winners")
 @login_required
 def winners():
     u = me()
-    rows = [snap(s) for s in fs.collection("results").order_by("ends", direction=DESC).limit(30).stream()]
+    rows = [dict(r) for r in cget("res", 30, lambda: [snap(s) for s in fs.collection("results").order_by("ends", direction=DESC).limit(30).stream()])]
+    st = {w["id"]: w["state"] for w in my_wins(u)}
     for w in rows:
         w["claim"] = None
         if w["uid"] == u["id"]:
-            c = fs.collection("claims").document(w["id"]).get()
-            w["claim"] = (c.to_dict() or {}).get("status", "pending") if c.exists else None
+            w["claim"] = {"need": None, "wait": "pending"}.get(st.get(w["id"], "sent"), "sent")
     return render_template("winners.html", u=u, rows=rows)
 
 @app.route("/profile")
 @login_required
 def profile():
     u = me()
-    n_ref = len(list(fs.collection("users").where("ref_by", "==", u["id"]).limit(100).stream()))
+    n_ref = u["refs"] if "refs" in u else (cnt(fs.collection("users").where("ref_by", "==", u["id"])) or 0)
     return render_template("profile.html", u=u, n_ref=n_ref, REF=REF, SIGNUP=SIGNUP, link=url_for("ref", code=u["code"], _external=True), is_admin=u["email"] in ADMINS)
 
 
@@ -428,54 +464,62 @@ def fb_link(s):
     return "https://" + h + p.path + (("?" + p.query) if p.query else "")
 
 @firestore.transactional
-def _claim_tx(tx, rref, cref, uref, data, uid):
-    r = rref.get(transaction=tx)
-    if not r.exists or r.to_dict()["uid"] != uid:
-        raise Fail("এই পুরস্কার আপনার নয়।")
+def _claim_tx(tx, cref, uref, data, rid):
     if cref.get(transaction=tx).exists:
         raise Fail("তথ্য আগেই জমা দিয়েছেন।")
-    u, rd = uref.get(transaction=tx).to_dict(), r.to_dict()
-    tx.set(cref, dict(data, uid=uid, email=u["email"], title=rd["title"], prize=rd["prize"],
-                      winner_num=rd["winner_num"], status="pending", ts=time.time()))
-    tx.update(uref, {"unclaimed": max(0, u.get("unclaimed", 0) - 1)})
+    u = uref.get(transaction=tx).to_dict()
+    wl = [dict(x) for x in (u.get("wl") or [])]
+    w = next((x for x in wl if x["id"] == rid), None)
+    if not w:
+        raise Fail("এই পুরস্কার আপনার নয়।")
+    w["state"] = "wait"
+    tx.set(cref, dict(data, uid=uref.id, email=u["email"], title=w["title"], prize=w["prize"],
+                      winner_num=w["winner_num"], status="pending", ts=time.time()))
+    tx.update(uref, {"wl": wl})
 
 @app.route("/claim/<rid>", methods=["GET", "POST"])
 @login_required
 def claim(rid):
     u = me()
-    r = fs.collection("results").document(rid).get()
-    if not r.exists or r.to_dict()["uid"] != u["id"]:
+    r = next((x for x in my_wins(u) if x["id"] == rid), None)
+    if not r:
         abort(404)
+    if r["state"] != "need":
+        flash("তথ্য আগেই জমা দিয়েছেন।")
+        return redirect(url_for("home"))
+    err = None
     if request.method == "POST":
         f = request.form
         name, addr = f.get("name", "").strip()[:60], f.get("address", "").strip()[:200]
-        phone, fb = re.sub(r"[\s-]", "", en(f.get("phone", ""))), fb_link(f.get("fb", ""))
+        phone, fb = norm_phone(f.get("phone", "")), fb_link(f.get("fb", ""))
         try:
             age = int(en(f.get("age", "")).strip())
         except ValueError:
             age = None
-        err = None
-        if len(name) < 3 or len(addr) < 10:
-            err = "পুরো নাম ও পুরো ঠিকানা লিখুন।"
-        elif not PHONE.match(phone):
-            err = "সঠিক মোবাইল নম্বর দিন (যেমন ০১৭XXXXXXXX)।"
+        if len(name) < 3:
+            err = "পুরো নাম লিখুন (কমপক্ষে ৩ অক্ষর)।"
+        elif not re.fullmatch(r"01\d{9}", phone):
+            err = "সঠিক মোবাইল নম্বর দিন (১১ সংখ্যা, যেমন ০১৭XXXXXXXX)।"
+        elif len(addr) < 10:
+            err = "পুরো ঠিকানা লিখুন (গ্রাম/এলাকা, থানা, জেলা সহ)।"
         elif age is None or age < 18 or age > 100:
             err = "পুরস্কার নিতে বয়স কমপক্ষে ১৮ হতে হবে।"
         elif not fb:
-            err = "সঠিক ফেসবুক প্রোফাইল লিংক দিন।"
+            err = "সঠিক ফেসবুক প্রোফাইল লিংক দিন (facebook.com/... )।"
         elif not f.get("ok"):
-            err = "তথ্য ব্যবহারের সম্মতি দিন।"
-        if err:
-            flash(err)
+            err = "নিচের সম্মতি বক্সে টিক দিন।"
         else:
             try:
-                _claim_tx(fs.transaction(), fs.collection("results").document(rid), fs.collection("claims").document(rid),
-                          fs.collection("users").document(u["id"]), dict(name=name, phone=phone, address=addr, age=age, fb=fb), u["id"])
+                _claim_tx(fs.transaction(), fs.collection("claims").document(rid), fs.collection("users").document(u["id"]),
+                          dict(name=name, phone=phone, address=addr, age=age, fb=fb), rid)
                 flash("তথ্য জমা হয়েছে। অ্যাডমিন শীঘ্রই যোগাযোগ করবেন।")
-                return redirect(url_for("winners"))
+                return redirect(url_for("home"))
             except Fail as e:
-                flash(str(e))
-    return render_template("claim.html", u=u, r=r.to_dict(), f=request.form)
+                err = str(e)
+            except Exception:
+                app.logger.exception("claim failed")
+                err = "সার্ভারে সমস্যা হয়েছে, একটু পরে আবার চেষ্টা করুন।"
+    return render_template("claim.html", u=u, r=r, f=request.form, err=err)
 
 # ---------- live draw ----------
 def mask_name(n):
@@ -484,33 +528,48 @@ def mask_name(n):
 @app.route("/live/<did>")
 @login_required
 def live(did):
-    s_ = fs.collection("draws").document(did).get()
-    if not s_.exists:
+    d = draw_get(did)
+    if not d:
         abort(404)
-    return render_template("live.html", u=me(), d=snap(s_))
+    return render_template("live.html", u=me(), d=d)
 
 @app.route("/live/<did>/state")
-@login_required
 def live_state(did):
-    dref = fs.collection("draws").document(did)
-    s_ = dref.get()
-    if not s_.exists:
+    if not session.get("uid"):  # session cookie is enough here: no user read per poll
+        abort(401)
+    d, now = draw_get(did), time.time()
+    if not d:
         abort(404)
-    d, now = s_.to_dict(), time.time()
+    dref = fs.collection("draws").document(did)
     if d["status"] == "open" and d["ends"] <= now:
         _finish_tx(fs.transaction(), dref)
-        d = dref.get().to_dict()
+        changed(did)
+        d = draw_get(did)
     if d["status"] == "drawing" and now >= d["ends"] + SPIN:
         _award_tx(fs.transaction(), dref)
-        d = dref.get().to_dict()
+        changed(did)
+        d = draw_get(did)
     out = dict(now=now, ends=d["ends"], status=d["status"], sold=d["sold"], title=d["title"], prize=d["prize"], spin=SPIN)
     if d["status"] in ("drawing", "done") and d.get("winner_num"):
         out["winner_num"] = d["winner_num"]
     if d["status"] == "done" and d.get("winner_user"):
-        r = fs.collection("results").document(did).get()
-        out["winner"] = mask_name((r.to_dict() or {}).get("name", ""))
-        out["mine"] = d["winner_user"] == me()["id"]
+        nm = d.get("winner_name")
+        if nm is None:  # older draws: read once, then cached
+            nm = cget("rn:" + did, 3600, lambda: (fs.collection("results").document(did).get().to_dict() or {}).get("name", ""))
+        out["winner"] = mask_name(nm)
+        out["mine"] = d["winner_user"] == session["uid"]
     return jsonify(out)
+
+# ---------- site notices (admin -> home page) ----------
+def notices_all():
+    def load():
+        s = fs.collection("config").document("site").get()
+        return (s.to_dict() or {}).get("notices", []) if s.exists else []
+    return cget("notices", 120, load)
+
+def notices_now():
+    now = time.time()
+    return [n for n in notices_all() if not n.get("exp") or n["exp"] > now]
 
 # ---------- admin ----------
 def admin_required(f):
@@ -591,12 +650,10 @@ def admin_users():
 def admin_user(uid):
     x = get_user(uid)
     uref = fs.collection("users").document(uid)
-    tix = [s.to_dict() for s in uref.collection("tickets").order_by("ts", direction=DESC).limit(100).stream()]
-    ids = list({t["draw"] for t in tix})
-    info = {s.id: (s.to_dict() or {}) for s in fs.get_all([fs.collection("draws").document(i) for i in ids])} if ids else {}
+    tix = [dict(t) for t in (x.get("tk") or [])]
     for t in tix:
-        d = info.get(t["draw"], {})
-        t["title"], t["status"] = d.get("title", "(মুছে গেছে)"), d.get("status", "")
+        d = draw_get(t["draw"]) or {}
+        t["title"], t["status"] = d.get("title") or t.get("title") or "(মুছে গেছে)", d.get("status", "")
         t["won"] = d.get("winner_user") == uid and d.get("winner_num") == t["num"]
     wins = sorted((snap(s) for s in fs.collection("results").where("uid", "==", uid).limit(50).stream()), key=lambda w: -w["ends"])
     cl = {s.id: s.to_dict() for s in fs.get_all([fs.collection("claims").document(w["id"]) for w in wins])} if wins else {}
@@ -675,9 +732,8 @@ def admin_delete(uid):
         flash("ডিলিট হয়নি। নিশ্চিত করতে DELETE লিখুন (অ্যাডমিন ডিলিট করা যায় না)।")
         return redirect(url_for("admin_user", uid=uid))
     uref = fs.collection("users").document(uid)
-    for s in uref.collection("tickets").limit(500).stream():
-        s.reference.delete()
     uref.delete()
+    changed()
     alog("delete", uid=uid, email=x["email"], name=x["name"])
     flash("ইউজার ডিলিট হয়েছে।")
     return redirect(url_for("admin_users"))
@@ -702,6 +758,7 @@ def admin_draw_new():
     e = int(end.timestamp())
     fs.collection("draws").document("custom-%d" % e).set(dict(kind="custom", title=title, prize=prize, cost=cost, cap=cap,
                                                               ends=e, status="open", sold=0))
+    changed()
     alog("draw_new", title=title, prize=prize)
     flash("নতুন ড্র তৈরি হয়েছে।")
     return redirect(url_for("admin_draws"))
@@ -728,6 +785,7 @@ def admin_finish(did):
         flash("এই ড্র আর চালু নেই।")
         return redirect(url_for("admin_draw", did=did))
     dref.update({"ends": int(time.time()) + 15})
+    changed(did)
     alog("draw_live", draw=did)
     flash("১৫ সেকেন্ড পরে লাইভ ড্র শুরু হবে।")
     return redirect(url_for("live", did=did))
@@ -754,10 +812,17 @@ def admin_cancel(did):
         per.setdefault(x["uid"], []).append(x["num"])
     for uid, nums in per.items():
         uref = fs.collection("users").document(uid)
-        if uref.get().exists:
-            uref.update({"points": firestore.Increment(len(nums) * d["cost"]), "tix": firestore.Increment(-len(nums))})
-            for n in nums:
-                uref.collection("tickets").document("%s_%d" % (did, n)).delete()
+        us = uref.get()
+        if not us.exists:
+            continue
+        u = us.to_dict()
+        upd = {"points": firestore.Increment(len(nums) * d["cost"]), "tix": firestore.Increment(-len(nums))}
+        if "tk" in u:
+            upd["tk"] = [t for t in u["tk"] if t.get("draw") != did]
+        if "mine" in u:
+            upd["mine"] = {k: v for k, v in u["mine"].items() if k != did}
+        uref.update(upd)
+    changed(did)
     alog("draw_cancel", draw=did, refunded=sum(len(v) for v in per.values()) * d["cost"])
     flash("ড্র বাতিল হয়েছে, সবার পয়েন্ট ফেরত দেওয়া হয়েছে।")
     return redirect(url_for("admin_draws"))
@@ -773,10 +838,53 @@ def admin_claims():
 @app.post("/admin/claim/<rid>/sent")
 @admin_required
 def admin_sent(rid):
-    fs.collection("claims").document(rid).update({"status": "sent", "sent_ts": time.time()})
+    cref = fs.collection("claims").document(rid)
+    c = cref.get().to_dict() or {}
+    cref.update({"status": "sent", "sent_ts": time.time()})
+    if c.get("uid"):  # winner no longer needs the "waiting" card
+        uref = fs.collection("users").document(c["uid"])
+        us = uref.get()
+        if us.exists and "wl" in us.to_dict():
+            uref.update({"wl": [x for x in us.to_dict()["wl"] if x["id"] != rid]})
     alog("claim_sent", claim=rid)
     flash("পাঠানো হয়েছে হিসেবে চিহ্নিত।")
     return redirect(url_for("admin_claims"))
+
+@app.route("/admin/notices")
+@admin_required
+def admin_notices():
+    return render_template("a_notices.html", rows=notices_all(), now=time.time())
+
+@app.post("/admin/notices/add")
+@admin_required
+def admin_notice_add():
+    f = request.form
+    text, link = f.get("text", "").strip()[:300], f.get("link", "").strip()[:300]
+    if len(text) < 3:
+        flash("নোটিশের লেখা দিন।")
+        return redirect(url_for("admin_notices"))
+    if link and not (link.startswith("https://") or link.startswith("http://") or link.startswith("/")):
+        link = ""
+    hrs = f.get("hours", type=int) or 0
+    n = dict(id=secrets.token_hex(4), text=text, link=link, level="imp" if f.get("level") == "imp" else "info",
+             ts=time.time(), exp=(time.time() + hrs * 3600) if hrs > 0 else 0)
+    rows = [x for x in notices_all() if not x.get("exp") or x["exp"] > time.time()]
+    rows = ([n] + rows)[:8]
+    fs.collection("config").document("site").set({"notices": rows}, merge=True)
+    cdrop("notices")
+    alog("notice_add", text=text[:60])
+    flash("নোটিশ হোম পেজে দেখানো শুরু হয়েছে।")
+    return redirect(url_for("admin_notices"))
+
+@app.post("/admin/notices/<nid>/del")
+@admin_required
+def admin_notice_del(nid):
+    rows = [x for x in notices_all() if x["id"] != nid]
+    fs.collection("config").document("site").set({"notices": rows}, merge=True)
+    cdrop("notices")
+    alog("notice_del", notice=nid)
+    flash("নোটিশ সরানো হয়েছে।")
+    return redirect(url_for("admin_notices"))
 
 @app.route("/admin/logs")
 @admin_required
