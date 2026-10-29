@@ -17,9 +17,9 @@ app.config.update(SESSION_COOKIE_SAMESITE="Lax", SESSION_COOKIE_HTTPONLY=True, P
 
 @app.route("/static/<path:filename>", endpoint="static")
 def static_files(filename):
-    if filename != "style.css":
+    if filename not in ("style.css", "desktop.css"):
         abort(404)
-    return send_from_directory(app.root_path, "style.css")
+    return send_from_directory(app.root_path, filename)
 
 GCID = os.environ.get("GOOGLE_CLIENT_ID", "")
 TZ = ZoneInfo("Asia/Dhaka")
@@ -173,39 +173,64 @@ def parse_amt(s):
 # ---------- draws (admin-created only; no automatic draws) ----------
 SPIN = 60  # seconds of live spin, same moment on every phone
 
+PLACE = ["১ম", "২য়", "৩য়"]
+RNG = secrets.SystemRandom()
+
+@app.template_filter("prizeline")
+def prizeline(d):
+    ps = d.get("prizes") or [d["prize"]]
+    return " · ".join("%s %s" % (PLACE[i], money(p)) for i, p in enumerate(ps))
+
 @firestore.transactional
 def _finish_tx(tx, dref):
-    # at the draw time: pick the winner (stored, hidden until the spin ends)
+    # at the draw time: pick up to 3 different winners (stored, hidden until the spin ends)
     d = dref.get(transaction=tx).to_dict()
     if not d or d["status"] != "open" or d["ends"] > time.time():
         return
+    ts = TREF.get(transaction=tx)
+    prizes = d.get("prizes") or [d["prize"]]
+    ws, seen = [], set()
     if d["sold"] > 0:
-        num = secrets.randbelow(d["sold"]) + 1
-        t = dref.collection("tickets").document(str(num)).get(transaction=tx).to_dict()
-        tx.update(dref, {"status": "drawing", "winner_num": num, "winner_user": t["uid"]})
-    else:
-        tx.update(dref, {"status": "done"})
+        for num in RNG.sample(range(1, d["sold"] + 1), min(d["sold"], 60)):
+            t = dref.collection("tickets").document(str(num)).get(transaction=tx).to_dict()
+            if t and t["uid"] not in seen:
+                seen.add(t["uid"])
+                ws.append({"place": len(ws) + 1, "num": num, "uid": t["uid"], "prize": prizes[len(ws)]})
+                if len(ws) == len(prizes):
+                    break
+    upd = {"status": "drawing" if ws else "done", "winners": ws}
+    if ws:
+        upd.update(winner_num=ws[0]["num"], winner_user=ws[0]["uid"])
+    unused = (sum(prizes) - sum(w["prize"] for w in ws)) if d.get("reserved") else 0
+    if unused > 0:  # prizes nobody won go back to the admin balance
+        tx.set(TREF, {"bal": _bal(ts) + unused}, merge=True)
+    tx.update(dref, upd)
 
 @firestore.transactional
 def _award_tx(tx, dref):
-    # after the spin: credit the prize and publish the result
+    # after the spin: credit every winner and publish the results
     d = dref.get(transaction=tx).to_dict()
     if not d or d["status"] != "drawing" or time.time() < d["ends"] + SPIN:
         return
-    uref = fs.collection("users").document(d["winner_user"])
-    us = uref.get(transaction=tx)
-    if not us.exists:
-        tx.update(dref, {"status": "done"})
-        return
-    u = us.to_dict()
-    upd = {"points": u["points"] + d["prize"], "wins": u.get("wins", 0) + 1}
-    if "wl" in u or u.get("wins", 0) == 0:  # pending-prize list lives on the user doc (no extra reads later)
-        upd["wl"] = (u.get("wl") or []) + [{"id": dref.id, "title": d["title"], "prize": d["prize"],
-                                            "winner_num": d["winner_num"], "ends": d["ends"], "state": "need"}]
-    tx.update(uref, upd)
-    tx.update(dref, {"status": "done", "winner_name": u["name"]})
-    tx.set(fs.collection("results").document(dref.id), {"uid": d["winner_user"], "name": u["name"], "title": d["title"],
-           "prize": d["prize"], "winner_num": d["winner_num"], "ends": d["ends"]})
+    legacy = "winners" not in d
+    ws = d.get("winners") or [{"place": 1, "num": d["winner_num"], "uid": d["winner_user"], "prize": d["prize"]}]
+    got = [(w, fs.collection("users").document(w["uid"])) for w in ws]
+    got = [(w, r, r.get(transaction=tx)) for w, r in got]
+    out = []
+    for w, uref, us in got:
+        if not us.exists:
+            continue
+        u = us.to_dict()
+        rid = dref.id if legacy else "%s_%d" % (dref.id, w["place"])
+        upd = {"points": u["points"] + w["prize"], "wins": u.get("wins", 0) + 1}
+        if "wl" in u or u.get("wins", 0) == 0:  # pending-prize list lives on the user doc (no extra reads later)
+            upd["wl"] = (u.get("wl") or []) + [{"id": rid, "title": d["title"], "prize": w["prize"], "winner_num": w["num"],
+                                                "ends": d["ends"], "state": "need", "place": w["place"]}]
+        tx.update(uref, upd)
+        tx.set(fs.collection("results").document(rid), {"uid": w["uid"], "name": u["name"], "title": d["title"], "prize": w["prize"],
+                                                        "winner_num": w["num"], "ends": d["ends"], "place": w["place"]})
+        out.append(dict(w, name=u["name"]))
+    tx.update(dref, {"status": "done", "winners": out})
 
 def active():
     # open / drawing admin draws: ONE query per 30s for the whole site
@@ -278,8 +303,10 @@ def my_wins(u):
 
 def last_result():
     def load():
-        for x in fs.collection("results").order_by("ends", direction=DESC).limit(1).stream():
-            r = snap(x)
+        rs = [snap(x) for x in fs.collection("results").order_by("ends", direction=DESC).limit(3).stream()]
+        if rs:
+            top = [r for r in rs if r["ends"] == rs[0]["ends"]]
+            r = min(top, key=lambda r: r.get("place", 1))
             r["mname"] = mask_name(r.get("name", ""))
             return r
     return cget("last", 60, load)
@@ -461,6 +488,7 @@ class Fail(Exception):
 def _buy_tx(tx, uref, dref, q, now, keep):
     u = uref.get(transaction=tx).to_dict()
     ds = dref.get(transaction=tx)
+    ts = TREF.get(transaction=tx)
     if not ds.exists:
         raise Fail("এই ড্র আর চালু নেই।")
     d = ds.to_dict()
@@ -481,6 +509,7 @@ def _buy_tx(tx, uref, dref, q, now, keep):
     mine = {k: v for k, v in mine.items() if k in keep}
     mine[dref.id] = have + q
     tx.update(dref, {"sold": d["sold"] + q})
+    tx.set(TREF, {"bal": _bal(ts) + cost}, merge=True)  # ticket money goes to the admin balance
     tx.update(uref, {"points": u["points"] - cost, "tix": u.get("tix", 0) + q, "tk": tk[:60], "mine": mine})
 
 @app.post("/buy/<did>")
@@ -632,7 +661,7 @@ def _claim_tx(tx, cref, uref, data, rid):
     if not w:
         raise Fail("এই পুরস্কার আপনার নয়।")
     w["state"] = "wait"
-    tx.set(cref, dict(data, uid=uref.id, email=u["email"], title=w["title"], prize=w["prize"],
+    tx.set(cref, dict(data, uid=uref.id, email=u["email"], title=w["title"] + (" (%s পুরস্কার)" % PLACE[w["place"] - 1] if w.get("place", 1) > 1 else ""), prize=w["prize"],
                       winner_num=w["winner_num"], status="pending", ts=time.time()))
     tx.update(uref, {"wl": wl})
 
@@ -713,12 +742,16 @@ def live_state(did):
     out = dict(now=now, ends=d["ends"], status=d["status"], sold=d["sold"], title=d["title"], prize=d["prize"], spin=SPIN)
     if d["status"] in ("drawing", "done") and d.get("winner_num"):
         out["winner_num"] = d["winner_num"]
+    out["prizes"] = d.get("prizes") or [d["prize"]]
     if d["status"] == "done" and d.get("winner_user"):
-        nm = d.get("winner_name")
-        if nm is None:  # older draws: read once, then cached
+        ws = d.get("winners")
+        if not ws:  # older single-winner draws: read the name once, then cached
             nm = cget("rn:" + did, 3600, lambda: (fs.collection("results").document(did).get().to_dict() or {}).get("name", ""))
-        out["winner"] = mask_name(nm)
-        out["mine"] = d["winner_user"] == session["uid"]
+            ws = [{"place": 1, "num": d["winner_num"], "uid": d["winner_user"], "prize": d["prize"], "name": nm}]
+        out["winners"] = [{"place": w["place"], "num": w["num"], "prize": w["prize"], "name": mask_name(w.get("name", "")),
+                           "mine": w["uid"] == session["uid"]} for w in ws]
+        out["winner"] = out["winners"][0]["name"]
+        out["mine"] = any(w["mine"] for w in out["winners"])
     return jsonify(out)
 
 # ---------- site notices (admin -> home page) ----------
@@ -756,7 +789,8 @@ def cnt(q):
         return None
 
 def alog(action, **kw):
-    fs.collection("adminlog").document().set(dict(kw, action=action, admin=me()["email"], ts=time.time()))
+    fs.collection("adminlog").document().set(dict(kw, action=action, admin=me()["email"], ts=time.time(),
+                                                  expire_at=datetime.utcnow() + timedelta(days=90)))  # Firestore TTL policy can delete these automatically
 
 def get_user(uid):
     s = fs.collection("users").document(uid).get()
@@ -1000,23 +1034,42 @@ def admin_draws():
     rows = [snap(s) for s in fs.collection("draws").order_by("ends", direction=DESC).limit(30).stream()]
     return render_template("a_draws.html", rows=rows)
 
+@firestore.transactional
+def _new_draw_tx(tx, dref, data, total):
+    ds, ts = dref.get(transaction=tx), TREF.get(transaction=tx)
+    if ds.exists:
+        raise Fail("এই সময়ে আরেকটি ড্র আছে, সময় একটু বদলান।")
+    bal = _bal(ts)
+    if bal < total:
+        raise Fail("অ্যাডমিন ব্যালেন্সে পুরস্কারের পয়েন্ট নেই (আছে %s)।" % short(bal))
+    tx.set(TREF, {"bal": bal - total}, merge=True)  # prizes are reserved from the admin balance up front
+    tx.set(dref, data)
+
 @app.post("/admin/draws/new")
 @admin_required
 def admin_draw_new():
     f = request.form
     try:
-        title, prize, cost, cap = f["title"].strip()[:60], int(en(f["prize"])), int(en(f["cost"])), int(en(f["cap"]))
+        title, cost, cap = f["title"].strip()[:60], parse_amt(f["cost"]), int(en(f["cap"]))
+        prizes = [parse_amt(f["prize"])] + [parse_amt(f[k]) for k in ("prize2", "prize3") if f.get(k, "").strip()]
         end = datetime.strptime(f["ends"], "%Y-%m-%dT%H:%M").replace(tzinfo=TZ)
-        assert title and prize > 0 and cost > 0 and 1 <= cap <= 100000 and end.timestamp() > time.time()
+        assert title and all(p > 0 for p in prizes) and cost > 0 and 1 <= cap <= 100000 and end.timestamp() > time.time()
+        if len(prizes) == 2 and not f.get("prize2", "").strip():
+            raise ValueError
     except (KeyError, ValueError, AssertionError):
         flash("সব ঘর সঠিকভাবে পূরণ করুন, শেষ সময় ভবিষ্যতের হতে হবে।")
         return redirect(url_for("admin_draws"))
     e = int(end.timestamp())
-    fs.collection("draws").document("custom-%d" % e).set(dict(kind="custom", title=title, prize=prize, cost=cost, cap=cap,
-                                                              ends=e, status="open", sold=0))
+    try:
+        _new_draw_tx(fs.transaction(), fs.collection("draws").document("custom-%d" % e),
+                     dict(kind="custom", title=title, prize=prizes[0], prizes=prizes, reserved=sum(prizes), cost=cost, cap=cap,
+                          ends=e, status="open", sold=0), sum(prizes))
+    except Fail as x:
+        flash(str(x))
+        return redirect(url_for("admin_draws"))
     changed()
-    alog("draw_new", title=title, prize=prize)
-    flash("নতুন ড্র তৈরি হয়েছে।")
+    alog("draw_new", title=title, prize=sum(prizes))
+    flash("নতুন ড্র তৈরি হয়েছে, পুরস্কারের %s পয়েন্ট অ্যাডমিন ব্যালেন্স থেকে আলাদা করা হয়েছে।" % bn(sum(prizes)))
     return redirect(url_for("admin_draws"))
 
 @app.route("/admin/draw/<did>")
@@ -1049,8 +1102,11 @@ def admin_finish(did):
 @firestore.transactional
 def _cancel_tx(tx, dref):
     d = dref.get(transaction=tx).to_dict()
+    ts = TREF.get(transaction=tx)
     if not d or d["status"] != "open":
         return None
+    # reserved prizes come back to the admin balance, ticket money goes back to the buyers
+    tx.set(TREF, {"bal": max(0, _bal(ts) + d.get("reserved", 0) - d["sold"] * d["cost"])}, merge=True)
     tx.update(dref, {"status": "cancelled"})
     return d
 
@@ -1141,6 +1197,16 @@ def admin_notice_del(nid):
     alog("notice_del", notice=nid)
     flash("নোটিশ সরানো হয়েছে।")
     return redirect(url_for("admin_notices"))
+
+@app.post("/admin/logs/clear")
+@admin_required
+def admin_logs_clear():
+    days = request.form.get("days", type=int) or 30
+    old = list(fs.collection("adminlog").where("ts", "<", time.time() - max(1, days) * 86400).limit(400).stream())
+    for s in old:
+        s.reference.delete()
+    flash("%s টি পুরোনো লগ মুছেছে।" % bn(len(old)) + (" আবার চাপুন, আরও আছে।" if len(old) == 400 else ""))
+    return redirect(url_for("admin_logs"))
 
 @app.route("/admin/logs")
 @admin_required
