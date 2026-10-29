@@ -9,7 +9,7 @@
     <ul class="au-feat"><li><b>লাইভ ড্র</b>সবার সামনে ১ মিনিটের স্পিনে সৎ বিজয়ী বাছাই</li><li><b>৩টি পুরস্কার</b>১ম, ২য় ও ৩য় — একসাথে তিনজন জেতেন</li><li><b>প্রতিদিন বোনাস</b>রোজ ঢুকলে বোনাস বাড়ে, বন্ধুকে ডাকলেও পয়েন্ট</li></ul>
   </section>
   <div class="au-form">
-  <div class="lt"><a href="{{ url_for('login') }}" class="{{ 'on' if mode=='login' }}">লগইন</a><a href="{{ url_for('signup') }}" class="{{ 'on' if mode=='signup' }}">নতুন অ্যাকাউন্ট</a></div>
+  <div class="lt"><a href="{{ url_for('login') }}" class="{{ 'on' if mode=='login' }}">লগইন</a><a href="{{ url_for('signup') }}" class="{{ 'on' if mode=='signup' }}">নতুন অ্যাকাউন্ট</a><a class="lang" style="margin-left:auto" href="{{ url_for('set_lang', code='bn' if lang=='en' else 'en') }}">{{ 'বাংলা' if lang=='en' else 'EN' }}</a></div>
   {% for m in get_flashed_messages() %}<div class="fl" role="alert">{{ m }}</div>{% endfor %}
   <form class="f" method="post">
     {% if mode=='signup' %}<label for="name">পুরো নাম</label><input id="name" name="name" required maxlength="40" autocomplete="name" value="{{ f.get('name','') }}">
