@@ -1,36 +1,35 @@
 {% extends "base.html" %}
 {% block content %}
 {% if u.get('status','approved')=='pending' %}<div class="nt0" style="border-radius:16px;padding:12px 14px;margin:0 0 12px;font-weight:600;background:#FFC53D;color:#2A0E4A">⏳ আপনার অ্যাকাউন্ট অ্যাডমিনের অ্যাপ্রুভালের অপেক্ষায়। অ্যাপ্রুভ হলে ১০০ পয়েন্ট বোনাস পাবেন।</div>{% endif %}
-{% for n in notes %}<div class="nt" data-id="{{ n.id }}" style="position:relative;border-radius:16px;padding:12px 38px 12px 14px;margin:0 0 12px;font-weight:600;{{ 'background:#FF2E7E;color:#fff' if n.level=='imp' else 'background:#FFC53D;color:#2A0E4A' }}">{{ '📢 ' if n.level=='imp' else '' }}{{ n.text }}{% if n.link %} <a href="{{ n.link }}" style="color:inherit;text-decoration:underline">দেখুন</a>{% endif %}<button type="button" aria-label="বন্ধ করুন" style="position:absolute;right:6px;top:6px;width:30px;height:30px;border:0;background:transparent;color:inherit;font-size:1.3rem;cursor:pointer">×</button></div>{% endfor %}
-{% if live_d %}<a class="ad" style="background:var(--pink);color:#fff;text-decoration:none;margin:0 0 14px" href="{{ url_for('live', did=live_d.id) }}"><div><b>লাইভ ড্র {{ 'চলছে' if live_d.status=='drawing' else 'শীঘ্রই শুরু' }}</b><small style="opacity:.9">{{ live_d.title }} · দেখতে চাপুন</small></div></a>{% endif %}
+{% for n in notes %}<div class="nt" data-id="{{ n.id }}" style="position:relative;border-radius:16px;padding:12px 38px 12px 14px;margin:0 0 12px;font-weight:600;{{ 'background:#FF2E7E;color:#fff' if n.level=='imp' else 'background:#FFC53D;color:#2A0E4A' }}">{{ '📢 ' if n.level=='imp' else '' }}{{ n.text|keep }}{% if n.link %} <a href="{{ n.link|keep }}" style="color:inherit;text-decoration:underline">দেখুন</a>{% endif %}<button type="button" aria-label="বন্ধ করুন" style="position:absolute;right:6px;top:6px;width:30px;height:30px;border:0;background:transparent;color:inherit;font-size:1.3rem;cursor:pointer">×</button></div>{% endfor %}
+{% if live_d %}<a class="ad" style="background:var(--pink);color:#fff;text-decoration:none;margin:0 0 14px" href="{{ url_for('live', did=live_d.id) }}"><div><b>লাইভ ড্র {{ 'চলছে' if live_d.status=='drawing' else 'শীঘ্রই শুরু' }}</b><small style="opacity:.9">{{ live_d.title|keep }} · দেখতে চাপুন</small></div></a>{% endif %}
 {% include "wincards.html" %}
 <div class="hm"><div class="hm-a">
 {% if d %}
 <div class="jp" id="cc" hidden style="background:linear-gradient(135deg,#FF2E7E,#7B2CBF);color:#fff;text-align:center">
   <span class="t" style="color:#FFE9A8">শীঘ্রই লাইভ ড্র</span>
-  <div style="font-family:Galada,sans-serif;font-size:1.5rem;margin-top:4px;position:relative;z-index:1">{{ d.title }}</div>
+  <div style="font-family:Galada,sans-serif;font-size:1.5rem;margin-top:4px;position:relative;z-index:1">{{ d.title|keep }}</div>
   <div class="jinfo" style="color:#fff;opacity:.9;position:relative;z-index:1">ড্র শুরু হতে বাকি</div>
   <div id="cc2" style="font-family:Galada,sans-serif;font-size:4.6rem;line-height:1.1;position:relative;z-index:1;font-variant-numeric:tabular-nums">০০:০০</div>
   <div class="jinfo" style="color:#fff;opacity:.9;position:relative;z-index:1">পুরস্কার {{ d|prizeline }} পয়েন্ট<br>{{ d.sold|bn }} টিকিট বিক্রি</div>
-  <a class="btn sun" style="display:block;margin-top:12px;position:relative;z-index:1" href="{{ url_for('live', did=d.id) }}">লাইভ ড্র দেখুন</a>
-  <a class="btn" style="display:block;margin-top:8px;position:relative;z-index:1;background:rgba(0,0,0,.3)" href="{{ url_for('ticket', d=d.id) }}">টিকিট নিন</a>
+  <div class="two" style="margin-top:12px;position:relative;z-index:1"><a class="btn sun" href="{{ url_for('live', did=d.id) }}">লাইভ ড্র দেখুন</a>
+  <a class="btn" style="background:rgba(0,0,0,.3)" href="{{ url_for('ticket', d=d.id) }}">টিকিট নিন</a></div>
 </div>
 <div class="jp" id="cn">
-  <span class="t">{{ d.title }}</span>
+  <span class="t">{{ d.title|keep }}</span>
   <div class="amt">{{ d.prize|m }}</div>{% if d.prizes and d.prizes|length>1 %}<div class="jinfo" style="text-align:center">{{ d|prizeline }}</div>{% endif %}
   <div class="ringwrap">
     <div class="ring"><svg width="118" height="118" viewBox="0 0 118 118"><circle cx="59" cy="59" r="52" fill="none" stroke="#EADFCB" stroke-width="10"/><circle id="arc" cx="59" cy="59" r="52" fill="none" stroke="#FF2E7E" stroke-width="10" stroke-linecap="round" stroke-dasharray="326.7" stroke-dashoffset="100"/></svg>
       <div class="c"><div id="ct">০০:০০:০০</div><span>বাকি</span></div></div>
     <div class="jinfo">{{ d.ends|when }} এ ড্র<br><b>{{ d.sold|bn }}/{{ d.cap|bn }}</b> টিকিট বিক্রি<div class="prog"><i style="width:{{ d.sold*100//d.cap }}%"></i></div>আপনার <b>{{ d.mine|bn }}</b>/{{ MAXT|bn }} টিকিট</div>
   </div>
-  <a class="btn" style="display:block;text-align:center" href="{{ url_for('ticket', d=d.id) }}">টিকিট নিন</a>
-  <a class="btn sun" style="display:block;text-align:center;margin-top:10px" href="{{ url_for('live', did=d.id) }}">লাইভ ড্র পেজ</a>
+  <div class="two"><a class="btn" href="{{ url_for('ticket', d=d.id) }}">টিকিট নিন</a>
+  <a class="btn sun" href="{{ url_for('live', did=d.id) }}">লাইভ ড্র</a></div>
 </div>
 {% elif not last and not live_d %}<div class="empty">এখন কোনো ড্র চালু নেই। নতুন ড্র শীঘ্রই আসছে।</div>{% endif %}
 </div><div class="hm-b">
-<div class="row2"><div class="st"><b>{{ tcount|bn }}</b><span>মোট টিকিট</span></div><div class="st"><b>{{ u.wins|bn }}</b><span>জয়</span></div></div>
+<div class="mini"><div><b>{{ tcount|bn }}</b> মোট টিকিট</div><div><b>{{ u.wins|bn }}</b> জয়</div></div>
 
-<a class="btn sun" style="display:block;text-align:center;margin:0 0 14px" href="{{ url_for('wallet') }}">ওয়ালেট — পয়েন্ট পাঠান / গ্রহণ করুন</a>
 <div class="streak"><b>৭ দিনের স্ট্রিক</b><span class="sub"> · রোজ ঢুকলে বোনাস বাড়ে</span>
   <div class="days">{% for i in range(1,8) %}{% set today_i = (i==day.done+1 and not day.claimed) %}<div><i class="{{ 'd' if i<=day.done else ('t' if today_i) }}">{{ '✓' if i<=day.done else i|bn }}</i>{{ 'আজ' if today_i else i|bn }}</div>{% endfor %}</div>
   <form method="post" action="{{ url_for('bonus') }}"><button class="btn sun" {{ 'disabled' if day.claimed }}>{{ 'আজকের বোনাস নেওয়া হয়েছে' if day.claimed else 'আজকের বোনাস নিন +' ~ (day.reward|bn) }}</button></form></div>
