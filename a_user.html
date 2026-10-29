@@ -3,6 +3,7 @@
 {% block content %}
 <div class="hd"><div><a class="mut sm" href="{{ url_for('admin_users') }}">← সব ইউজার</a><h1>{{ x.name }}
   {% if x.banned %}<span class="bd bad">ব্যান</span>{% else %}<span class="bd ok">সক্রিয়</span>{% endif %}
+  {% if x.get('status','approved')=='pending' %}<span class="bd gold">অ্যাপ্রুভালের অপেক্ষায়</span>{% endif %}
   {% if rank and rank<=3 %}<span class="bd gold">বর্তমানে টপ {{ rank|bn }}</span>{% endif %}</h1></div></div>
 <div class="g">
   <div class="stat hl"><b>{{ x.points|bn }}</b><span>পয়েন্ট</span></div>
@@ -12,17 +13,18 @@
 </div>
 <div class="g2">
 <div class="card"><h2>পরিচিতি</h2><dl class="kv">
-  <dt>ইমেইল</dt><dd>{{ x.email }}</dd><dt>ফোন</dt><dd>{{ x.phone or '—' }}</dd>
+  <dt>ইউজার আইডি</dt><dd>{{ (x.pid or '—')|bn }}</dd><dt>ইমেইল</dt><dd>{{ x.email }}</dd><dt>ফোন</dt><dd>{{ x.phone or '—' }}</dd>
+  <dt>ঠিকানা</dt><dd>{{ x.addr or '—' }}</dd><dt>বয়স</dt><dd>{{ x.age|bn if x.age else '—' }}</dd><dt>ফেসবুক</dt><dd>{% if x.fb %}<a href="{{ x.fb }}" target="_blank" rel="noopener noreferrer">{{ x.fb }}</a>{% else %}—{% endif %}</dd>
   <dt>যোগ দিয়েছেন</dt><dd>{{ x.created|when if x.created else '—' }}</dd><dt>শেষ লগইন</dt><dd>{{ x.last_login|when if x.last_login else '—' }}</dd>
   <dt>রেফার কোড</dt><dd>{{ x.code }}</dd><dt>রেফার করেছেন</dt><dd>{{ (refs if refs is not none else '—')|bn }} জন</dd>
   <dt>কার মাধ্যমে এসেছে</dt><dd>{{ by.name if by else '—' }}</dd>
   {% if x.banned %}<dt>ব্যানের কারণ</dt><dd>{{ x.ban_reason or '—' }}</dd>{% endif %}</dl></div>
-<div class="card"><h2>পয়েন্ট বদলান</h2>
+<div class="card"><h2>পয়েন্ট যোগ করুন</h2>
+  <p class="mut sm">অ্যাডমিন ব্যালেন্স: <b>{{ bal|m }}</b> পয়েন্ট। যোগ করলে এখান থেকে কাটবে; ইউজারের পয়েন্ট কমানো যায় না।</p>
   <form method="post" action="{{ url_for('admin_points', uid=x.id) }}">
-    <label for="m">কী করবেন</label><select id="m" name="mode"><option value="add">যোগ বা বাদ (বাদ দিতে মাইনাস দিন)</option><option value="set">সরাসরি এই সংখ্যা করুন</option></select>
-    <label for="a">সংখ্যা (যেমন 100 বা -50)</label><input id="a" name="amount" required inputmode="numeric" pattern="-?[0-9০-৯]+">
+    <label for="a">কত পয়েন্ট</label><input id="a" name="amount" required inputmode="numeric" pattern="[0-9০-৯]+">
     <label for="r">কারণ</label><input id="r" name="reason" maxlength="80">
-    <p><button class="bt pk">সেভ করুন</button></p></form></div>
+    <p><button class="bt pk">যোগ করুন</button></p></form></div>
 <div class="card"><h2>নাম ও ফোন বদলান</h2>
   <form method="post" action="{{ url_for('admin_edit', uid=x.id) }}">
     <label for="n">নাম</label><input id="n" name="name" value="{{ x.name }}" required maxlength="60">
@@ -42,6 +44,8 @@
 {% else %}<tr><td>কোনো টিকিট নেই</td></tr>{% endfor %}</tbody></table></div></div>
 
 <div class="card"><h2>জয়ের ইতিহাস ({{ wins|length|bn }}বার)</h2><div class="sc"><table class="rt"><thead><tr><th>ড্র</th><th>টিকিট</th><th>পুরস্কার</th><th>সময়</th><th>দাবি ও যোগাযোগ</th></tr></thead><tbody>
+{% if x.get('txl') %}<div class="card"><h2>সাম্প্রতিক পাঠানো/পাওয়া পয়েন্ট</h2><div class="sc"><table class="rt"><thead><tr><th>সময়</th><th>ধরন</th><th>অপর পক্ষ</th><th>পরিমাণ</th><th>ফি</th></tr></thead><tbody>
+{% for t in x.txl %}<tr><td data-l="সময়">{{ t.ts|when }}</td><td data-l="ধরন">{{ 'পেয়েছেন' if t.t=='in' else 'পাঠিয়েছেন' }}</td><td data-l="অপর পক্ষ">{{ t.name }} ({{ t.pid|bn }})</td><td data-l="পরিমাণ">{{ t.amt|m }}</td><td data-l="ফি">{{ t.fee|m }}</td></tr>{% endfor %}</tbody></table></div></div>{% endif %}
 {% for w in wins %}<tr><td data-l="ড্র">{{ w.title }}</td><td data-l="টিকিট">#{{ w.winner_num|pad4 }}</td><td data-l="পুরস্কার">{{ w.prize|m }}</td><td data-l="সময়">{{ w.ends|when }}</td>
   <td data-l="দাবি">{% if w.claim %}<span class="bd {{ 'ok' if w.claim.status=='sent' else 'gold' }}">{{ 'পাঠানো হয়েছে' if w.claim.status=='sent' else 'অপেক্ষমাণ' }}</span><br>{{ w.claim.name }} · {{ w.claim.phone }} · বয়স {{ w.claim.age|bn }}<br>{{ w.claim.address }}<br><a href="{{ w.claim.fb }}" target="_blank" rel="noopener noreferrer">ফেসবুক</a>{% else %}<span class="bd mu">তথ্য দেয়নি</span>{% endif %}</td></tr>
 {% else %}<tr><td>কখনো জেতেনি</td></tr>{% endfor %}</tbody></table></div></div>
