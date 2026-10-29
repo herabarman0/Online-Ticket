@@ -1,0 +1,26 @@
+{% extends "base.html" %}
+{% block content %}
+<h2>ওয়ালেট</h2>
+<div class="row2"><div class="st"><b>{{ u.points|bn }}</b><span>পয়েন্ট</span></div><div class="st"><b>৳{{ (u.points//10)|bn }}</b><span>আনুমানিক মূল্য (শুধু দেখার জন্য)</span></div></div>
+<div class="lt" style="margin:12px 0"><a href="{{ url_for('wallet') }}" class="{{ 'on' if tab=='send' }}">পাঠান</a><a href="{{ url_for('wallet', t='recv') }}" class="{{ 'on' if tab=='recv' }}">গ্রহণ করুন</a></div>
+{% if pend %}<div class="fl">অ্যাডমিন অ্যাপ্রুভ করার পর পাঠানো যাবে।</div>{% endif %}
+{% if tab=='send' %}
+<form class="f" method="post" id="sf">
+  <label for="pid">যাকে পাঠাবেন তার আইডি</label><input id="pid" name="pid" required inputmode="numeric" placeholder="৭ সংখ্যার আইডি">
+  <label for="am">কত পয়েন্ট (কমপক্ষে {{ MIN_SEND|bn }})</label><input id="am" name="amount" required inputmode="numeric">
+  <p class="sub" id="fee" style="margin:8px 0">ফি {{ FEE_PCT|bn }}% আলাদা করে কাটা হবে।</p>
+  <button class="btn" {{ 'disabled' if pend }}>পাঠান</button>
+</form>
+<script>var B="০১২৩৪৫৬৭৮৯";function bn(s){return String(s).replace(/\d/g,function(d){return B[d]})}
+document.getElementById("am").oninput=function(){var v=parseInt(this.value.replace(/[০-৯]/g,function(d){return B.indexOf(d)}),10);
+ document.getElementById("fee").textContent=v>0?"আপনার কাটবে "+bn(v+Math.max(1,Math.ceil(v*{{ FEE_PCT }}/100)))+" পয়েন্ট (ফি "+bn(Math.max(1,Math.ceil(v*{{ FEE_PCT }}/100)))+")":"ফি {{ FEE_PCT|bn }}% আলাদা করে কাটা হবে।"}</script>
+{% else %}
+<div class="jp" style="text-align:center"><span class="t">আমার আইডি</span><div class="amt" id="mp">{{ u.pid|bn }}</div>
+  <div class="jinfo">এই আইডি দিলে অন্য ইউজার আপনাকে পয়েন্ট পাঠাতে পারবে</div>
+  <button class="btn sun" type="button" id="cp" style="margin-top:10px;position:relative;z-index:1">আইডি কপি করুন</button></div>
+<script>document.getElementById("cp").onclick=function(){var t="{{ u.pid }}",b=this;(navigator.clipboard?navigator.clipboard.writeText(t):Promise.resolve()).then(function(){b.textContent="কপি হয়েছে"})}</script>
+{% endif %}
+<h3 style="margin-top:18px">সাম্প্রতিক লেনদেন</h3>
+{% for t in txl %}<div class="li"><div class="nmx">{{ t.name }} <small>আইডি {{ t.pid|bn }} · {{ t.ts|when }}{{ ' · ফি ' ~ (t.fee|bn) if t.fee }}</small></div><b class="v" style="color:{{ '#0E8F63' if t.t=='in' else '#D6244A' }}">{{ '+' if t.t=='in' else '−' }}{{ t.amt|m }}</b></div>
+{% else %}<div class="empty">এখনো কোনো লেনদেন নেই।</div>{% endfor %}
+{% endblock %}
