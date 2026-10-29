@@ -24,11 +24,12 @@ def static_files(filename):
 GCID = os.environ.get("GOOGLE_CLIENT_ID", "")
 TZ = ZoneInfo("Asia/Dhaka")
 SIGNUP, REF, MAXT, AD_REWARD, AD_MAX = 100, 50, 5, 10, 5
+TREASURY, FEE_PCT, MIN_SEND, MAX_SEND = 10_000_000, 5, 10, 100000  # admin pool, transfer fee %, send limits
 KL = {"daily": "প্রতিদিন", "weekly": "সাপ্তাহিক", "monthly": "মাসিক", "custom": "বিশেষ"}
 KO = {"daily": 0, "weekly": 1, "monthly": 2}
 ADMIN_PASSWORD = os.environ.get("ADMIN_PASSWORD", "")
 ADMINS = {e.strip().lower() for e in os.environ.get("ADMIN_EMAILS", "").split(",") if e.strip()}
-app.jinja_env.globals.update(KL=KL, MAXT=MAXT, AD_REWARD=AD_REWARD)
+app.jinja_env.globals.update(KL=KL, MAXT=MAXT, AD_REWARD=AD_REWARD, FEE_PCT=FEE_PCT)
 
 _cred = os.environ.get("FIREBASE_CREDENTIALS", "")
 if not _cred:
@@ -103,18 +104,40 @@ def by_email(e):
     for s in fs.collection("users").where("email", "==", e).limit(1).stream():
         return snap(s)
 
-def new_user(email, name, pw_hash, ref_code="", phone=""):
+def gen_pid():
+    while True:
+        p = str(secrets.randbelow(9000000) + 1000000)
+        if not list(fs.collection("users").where("pid", "==", p).limit(1).stream()):
+            return p
+
+def is_pending(u):
+    return u.get("status", "approved") != "approved"  # accounts made before approval existed count as approved
+
+def new_user(email, name, pw_hash, ref_code="", phone="", extra=None, admin=False):
     ref = None
     if ref_code:
         for s in fs.collection("users").where("code", "==", ref_code).limit(1).stream():
             ref = s
     r = fs.collection("users").document()
-    r.set({"email": email, "name": name, "pw": pw_hash, "points": SIGNUP, "code": secrets.token_hex(3).upper(),
-           "ref_by": ref.id if ref else None, "phone": phone, "created": time.time(), "banned": False, "last_bonus": "", "wins": 0, "tix": 0, "streak": 0, "ad_day": "", "ad_n": 0,
-           "wl": [], "tk": [], "mine": {}, "refs": 0})
+    d = {"email": email, "name": name, "pw": pw_hash, "points": 0, "code": secrets.token_hex(3).upper(), "pid": gen_pid(),
+         "ref_by": ref.id if ref else None, "phone": phone, "created": time.time(), "banned": False, "last_bonus": "", "wins": 0,
+         "tix": 0, "streak": 0, "ad_day": "", "ad_n": 0, "wl": [], "tk": [], "mine": {}, "refs": 0, "txl": [],
+         "status": "approved" if admin else "pending"}
+    d.update(extra or {})
+    r.set(d)
     if ref:
-        ref.reference.update({"points": firestore.Increment(REF), "refs": firestore.Increment(1)})
+        ref.reference.update({"refs": firestore.Increment(1)})  # referral points are paid when the admin approves this account
     return r.id
+
+def ensure_pid(u):
+    if not u.get("pid"):
+        u["pid"] = gen_pid()
+        fs.collection("users").document(u["id"]).update({"pid": u["pid"]})
+
+TREF = fs.collection("config").document("treasury")
+def tre_bal():
+    s = TREF.get()
+    return (s.to_dict() or {}).get("bal", TREASURY) if s.exists else TREASURY
 
 # ---------- draws (admin-created only; no automatic draws) ----------
 SPIN = 60  # seconds of live spin, same moment on every phone
@@ -238,21 +261,36 @@ def ref(code):
 
 @app.route("/signup", methods=["GET", "POST"])
 def signup():
+    f = request.form
     if request.method == "POST":
-        f = request.form
         name, email, pw = f.get("name", "").strip()[:40], f.get("email", "").strip().lower(), f.get("pw", "")
-        if not name or "@" not in email or len(pw) < 6:
-            flash("নাম, সঠিক ইমেইল ও কমপক্ষে ৬ অক্ষরের পাসওয়ার্ড দিন।")
-        elif not re.fullmatch(r"01\d{9}", norm_phone(f.get("phone", ""))):
+        phone, addr, fb = norm_phone(f.get("phone", "")), f.get("address", "").strip()[:200], fb_link(f.get("fb", ""))
+        try:
+            age = int(en(f.get("age", "")).strip())
+        except ValueError:
+            age = None
+        if len(name) < 3 or "@" not in email or len(pw) < 6:
+            flash("পুরো নাম, সঠিক ইমেইল ও কমপক্ষে ৬ অক্ষরের পাসওয়ার্ড দিন।")
+        elif not re.fullmatch(r"01\d{9}", phone):
             flash("সঠিক মোবাইল নম্বর দিন (যেমন ০১৭XXXXXXXX)।")
+        elif len(addr) < 10:
+            flash("পুরো ঠিকানা লিখুন (গ্রাম/এলাকা, থানা, জেলা সহ)।")
+        elif age is None or age < 18 or age > 100:
+            flash("অ্যাকাউন্ট খুলতে বয়স কমপক্ষে ১৮ হতে হবে।")
+        elif not fb:
+            flash("সঠিক ফেসবুক প্রোফাইল লিংক দিন (facebook.com/...)।")
+        elif not f.get("ok"):
+            flash("সম্মতি বক্সে টিক দিন।")
         elif email in ADMINS:
             flash("এই ইমেইলে অ্যাকাউন্ট খুলতে হবে না, সরাসরি লগইন করুন।")
         elif by_email(email):
             flash("এই ইমেইলে আগেই অ্যাকাউন্ট আছে। লগইন করুন।")
         else:
-            session["uid"] = new_user(email, name, generate_password_hash(pw), session.pop("ref", "") or f.get("ref", "").strip().upper(), norm_phone(f.get("phone", "")))
+            session["uid"] = new_user(email, name, generate_password_hash(pw), session.pop("ref", "") or f.get("ref", "").strip().upper(),
+                                      phone, dict(addr=addr, age=age, fb=fb))
+            flash("অ্যাকাউন্ট খোলা হয়েছে। অ্যাডমিন অ্যাপ্রুভ করলে ১০০ পয়েন্ট বোনাস পাবেন।")
             return redirect(url_for("home"))
-    return render_template("auth.html", mode="signup", gcid=GCID, ref=session.get("ref", ""))
+    return render_template("auth.html", mode="signup", gcid=GCID, ref=session.get("ref", ""), f=f)
 
 @app.route("/login", methods=["GET", "POST"])
 def login():
@@ -262,7 +300,7 @@ def login():
             # admin signs in with the ADMIN_PASSWORD set in Render's Environment
             if ADMIN_PASSWORD and hmac.compare_digest(pw.encode(), ADMIN_PASSWORD.encode()):
                 u = by_email(email)
-                session["uid"] = u["id"] if u else new_user(email, "Admin", None)
+                session["uid"] = u["id"] if u else new_user(email, "Admin", None, admin=True)
                 return redirect(url_for("admin"))
             time.sleep(1)
         else:
@@ -270,12 +308,12 @@ def login():
             if u and u.get("pw") and check_password_hash(u["pw"], pw):
                 if u.get("banned"):
                     flash("আপনার অ্যাকাউন্ট বন্ধ করা হয়েছে। অ্যাডমিনের সাথে যোগাযোগ করুন।")
-                    return render_template("auth.html", mode="login", gcid=GCID, ref="")
+                    return render_template("auth.html", mode="login", gcid=GCID, ref="", f={})
                 session["uid"] = u["id"]
                 fs.collection("users").document(u["id"]).update({"last_login": time.time()})
                 return redirect(url_for("home"))
         flash("ইমেইল বা পাসওয়ার্ড ঠিক নয়।")
-    return render_template("auth.html", mode="login", gcid=GCID, ref="")
+    return render_template("auth.html", mode="login", gcid=GCID, ref="", f={})
 
 @app.post("/auth/google")
 def google():
@@ -334,6 +372,9 @@ def _bonus_tx(tx, ref_, t, y):
 @app.post("/bonus")
 @login_required
 def bonus():
+    if is_pending(me()):
+        flash("অ্যাডমিন অ্যাপ্রুভ করার পর বোনাস নিতে পারবেন।")
+        return redirect(url_for("home"))
     t = today()
     r = _bonus_tx(fs.transaction(), fs.collection("users").document(me()["id"]), t.isoformat(), (t - timedelta(days=1)).isoformat())
     flash("%s পয়েন্ট বোনাস পেয়েছেন।" % bn(r) if r else "আজকের বোনাস নেওয়া হয়ে গেছে।")
@@ -352,6 +393,8 @@ def _ad_tx(tx, ref_, t):
 @login_required
 def ad():
     # TODO: replace with a server-side reward callback from your ad network (AdMob SSV / Unity) before going live
+    if is_pending(me()):
+        return jsonify(ok=False, msg="অ্যাকাউন্ট অ্যাপ্রুভ হয়নি"), 403
     r = _ad_tx(fs.transaction(), fs.collection("users").document(me()["id"]), today().isoformat())
     if not r:
         return jsonify(ok=False, msg="আজকের সীমা শেষ"), 429
@@ -400,6 +443,9 @@ def _buy_tx(tx, uref, dref, q, now, keep):
 @app.post("/buy/<did>")
 @login_required
 def buy(did):
+    if is_pending(me()):
+        flash("অ্যাডমিন অ্যাপ্রুভ করার পর টিকিট কিনতে পারবেন।")
+        return redirect(url_for("ticket", d=did))
     q = max(1, min(MAXT, request.form.get("q", 1, type=int)))
     uref = fs.collection("users").document(me()["id"])
     dref = fs.collection("draws").document(did)
@@ -436,9 +482,59 @@ def winners():
 @login_required
 def profile():
     u = me()
+    ensure_pid(u)
     n_ref = u["refs"] if "refs" in u else (cnt(fs.collection("users").where("ref_by", "==", u["id"])) or 0)
-    return render_template("profile.html", u=u, n_ref=n_ref, REF=REF, SIGNUP=SIGNUP, link=url_for("ref", code=u["code"], _external=True), is_admin=u["email"] in ADMINS)
+    return render_template("profile.html", u=u, n_ref=n_ref, REF=REF, SIGNUP=SIGNUP, link=url_for("ref", code=u["code"], _external=True), is_admin=u["email"] in ADMINS, pend=is_pending(u))
 
+
+# ---------- wallet: send / receive points by user ID ----------
+@firestore.transactional
+def _send_tx(tx, sref, rref, amt, fee):
+    s_, r_, t_ = sref.get(transaction=tx), rref.get(transaction=tx), TREF.get(transaction=tx)
+    if not s_.exists or not r_.exists:
+        raise Fail("ইউজার পাওয়া যায়নি।")
+    s, r = s_.to_dict(), r_.to_dict()
+    if is_pending(s):
+        raise Fail("অ্যাডমিন অ্যাপ্রুভ করার পর পয়েন্ট পাঠাতে পারবেন।")
+    if is_pending(r) or r.get("banned"):
+        raise Fail("এই আইডিতে এখন পয়েন্ট পাঠানো যাবে না।")
+    if s["points"] < amt + fee:
+        raise Fail("পয়েন্ট কম আছে। পাঠাতে লাগবে %s (ফি সহ)।" % bn(amt + fee))
+    bal = (t_.to_dict() or {}).get("bal", TREASURY) if t_.exists else TREASURY
+    now = time.time()
+    tx.update(sref, {"points": s["points"] - amt - fee, "txl": ([{"t": "out", "name": r["name"], "pid": r.get("pid", ""), "amt": amt, "fee": fee, "ts": now}] + (s.get("txl") or []))[:30]})
+    tx.update(rref, {"points": r["points"] + amt, "txl": ([{"t": "in", "name": s["name"], "pid": s.get("pid", ""), "amt": amt, "fee": 0, "ts": now}] + (r.get("txl") or []))[:30]})
+    tx.set(TREF, {"bal": bal + fee})  # the fee goes back to the admin pool
+    return r["name"]
+
+@app.route("/wallet", methods=["GET", "POST"])
+@login_required
+def wallet():
+    u = me()
+    ensure_pid(u)
+    tab = "recv" if request.args.get("t") == "recv" else "send"
+    if request.method == "POST":
+        pid = en(request.form.get("pid", "")).strip()
+        try:
+            amt = int(en(request.form.get("amount", "")).strip())
+            assert MIN_SEND <= amt <= MAX_SEND
+        except (ValueError, AssertionError):
+            flash("পরিমাণ কমপক্ষে %s ও সর্বোচ্চ %s পয়েন্ট হতে হবে।" % (bn(MIN_SEND), bn(MAX_SEND)))
+            return redirect(url_for("wallet"))
+        fee = max(1, -(-amt * FEE_PCT // 100))
+        rs = list(fs.collection("users").where("pid", "==", pid).limit(1).stream()) if pid else []
+        if not rs:
+            flash("এই আইডির কোনো ইউজার পাওয়া যায়নি।")
+        elif rs[0].id == u["id"]:
+            flash("নিজেকে পাঠানো যায় না।")
+        else:
+            try:
+                nm = _send_tx(fs.transaction(), fs.collection("users").document(u["id"]), rs[0].reference, amt, fee)
+                flash("%s-কে %s পয়েন্ট পাঠানো হয়েছে (ফি %s)।" % (nm, bn(amt), bn(fee)))
+            except Fail as e:
+                flash(str(e))
+        return redirect(url_for("wallet"))
+    return render_template("wallet.html", u=u, tab=tab, txl=u.get("txl") or [], MIN_SEND=MIN_SEND, pend=is_pending(u))
 
 # ---------- prize claim (winner details) ----------
 PHONE = re.compile(r"^(?:\+?88)?01\d{9}$")
@@ -519,7 +615,9 @@ def claim(rid):
             except Exception:
                 app.logger.exception("claim failed")
                 err = "সার্ভারে সমস্যা হয়েছে, একটু পরে আবার চেষ্টা করুন।"
-    return render_template("claim.html", u=u, r=r, f=request.form, err=err)
+    pre = request.form if request.method == "POST" else dict(name=u.get("name", ""), phone=u.get("phone", ""), address=u.get("addr", ""),
+                                                          age=u.get("age", ""), fb=u.get("fb", ""))
+    return render_template("claim.html", u=u, r=r, f=pre, err=err)
 
 # ---------- live draw ----------
 def mask_name(n):
@@ -615,7 +713,8 @@ def admin():
     U = fs.collection("users")
     day0 = datetime.now(TZ).replace(hour=0, minute=0, second=0, microsecond=0).timestamp()
     st = dict(users=cnt(U), banned=cnt(U.where("banned", "==", True)), new=cnt(U.where("created", ">=", day0)),
-              claims=cnt(fs.collection("claims").where("status", "==", "pending")))
+              claims=cnt(fs.collection("claims").where("status", "==", "pending")),
+              pend=cnt(U.where("status", "==", "pending")), bal=tre_bal())
     draws = sorted((snap(s) for s in fs.collection("draws").where("status", "==", "open").stream()), key=lambda d: d["ends"])
     top = [snap(s) for s in U.order_by("points", direction=DESC).limit(5).stream()]
     new = [snap(s) for s in U.order_by("created", direction=DESC).limit(5).stream()]
@@ -668,34 +767,86 @@ def admin_user(uid):
         by = b.to_dict() if b.exists else None
     hist = sorted((snap(s) for s in fs.collection("adminlog").where("uid", "==", uid).limit(30).stream()), key=lambda h: -h["ts"])
     return render_template("a_user.html", x=x, tix=tix, wins=wins, rank=(higher + 1 if higher is not None else None),
-                           refs=refs, by=by, hist=hist)
+                           refs=refs, by=by, hist=hist, bal=tre_bal())
 
 @firestore.transactional
-def _pts_tx(tx, uref, mode, amt, reason, admin_email):
-    s = uref.get(transaction=tx)
+def _pts_tx(tx, uref, amt, reason, admin_email):
+    s, t = uref.get(transaction=tx), TREF.get(transaction=tx)
     if not s.exists:
         raise Fail("ইউজার পাওয়া যায়নি।")
+    bal = (t.to_dict() or {}).get("bal", TREASURY) if t.exists else TREASURY
+    if amt > bal:
+        raise Fail("অ্যাডমিন ব্যালেন্সে এত পয়েন্ট নেই (আছে %s)।" % bn(bal))
     p = s.to_dict()["points"]
-    new = max(0, p + amt if mode == "add" else amt)
-    tx.update(uref, {"points": new})
-    tx.set(fs.collection("adminlog").document(), dict(action="points", uid=uref.id, mode=mode, amount=amt, before=p,
-                                                      after=new, reason=reason, admin=admin_email, ts=time.time()))
-    return new
+    tx.update(uref, {"points": p + amt})
+    tx.set(TREF, {"bal": bal - amt})
+    tx.set(fs.collection("adminlog").document(), dict(action="points", uid=uref.id, mode="add", amount=amt, before=p,
+                                                      after=p + amt, reason=reason, admin=admin_email, ts=time.time()))
+    return p + amt
 
 @app.post("/admin/user/<uid>/points")
 @admin_required
 def admin_points(uid):
     f = request.form
     try:
-        amt, mode = int(en(f.get("amount", "")).strip()), f.get("mode", "add")
-        assert mode in ("add", "set") and abs(amt) <= 10 ** 7
-        new = _pts_tx(fs.transaction(), fs.collection("users").document(uid), mode, amt, f.get("reason", "")[:80], me()["email"])
-        flash("পয়েন্ট এখন %s।" % bn(new))
+        amt = int(en(f.get("amount", "")).strip())
+        assert 0 < amt <= 10 ** 7
+        new = _pts_tx(fs.transaction(), fs.collection("users").document(uid), amt, f.get("reason", "")[:80], me()["email"])
+        flash("%s পয়েন্ট যোগ হয়েছে, এখন %s।" % (bn(amt), bn(new)))
     except (ValueError, AssertionError):
-        flash("সঠিক সংখ্যা দিন।")
+        flash("১ বা তার বেশি সঠিক সংখ্যা দিন (পয়েন্ট কমানো যায় না)।")
     except Fail as e:
         flash(str(e))
     return redirect(url_for("admin_user", uid=uid))
+
+# ---- approvals ----
+@firestore.transactional
+def _approve_tx(tx, uref):
+    us, ts = uref.get(transaction=tx), TREF.get(transaction=tx)
+    if not us.exists:
+        raise Fail("ইউজার পাওয়া যায়নি।")
+    u = us.to_dict()
+    if not is_pending(u):
+        raise Fail("আগেই অ্যাপ্রুভ করা হয়েছে।")
+    bal = (ts.to_dict() or {}).get("bal", TREASURY) if ts.exists else TREASURY
+    if bal < SIGNUP:
+        raise Fail("অ্যাডমিন ব্যালেন্সে বোনাসের পয়েন্ট নেই।")
+    rref = fs.collection("users").document(u["ref_by"]) if u.get("ref_by") else None
+    rs = rref.get(transaction=tx) if rref else None
+    tx.update(uref, {"status": "approved", "points": u["points"] + SIGNUP, "approved_ts": time.time()})
+    tx.set(TREF, {"bal": bal - SIGNUP})
+    if rs is not None and rs.exists:
+        tx.update(rref, {"points": rs.to_dict()["points"] + REF})
+
+@app.route("/admin/approvals")
+@admin_required
+def admin_approvals():
+    rows = sorted((snap(s) for s in fs.collection("users").where("status", "==", "pending").limit(50).stream()), key=lambda x: x.get("created", 0))
+    return render_template("a_approvals.html", rows=rows, SIGNUP=SIGNUP)
+
+@app.post("/admin/user/<uid>/approve")
+@admin_required
+def admin_approve(uid):
+    try:
+        _approve_tx(fs.transaction(), fs.collection("users").document(uid))
+        alog("approve", uid=uid, reason="+%d" % SIGNUP)
+        cdrop("board:*")
+        flash("অ্যাপ্রুভ হয়েছে, %s পয়েন্ট বোনাস গেছে।" % bn(SIGNUP))
+    except Fail as e:
+        flash(str(e))
+    return redirect(url_for("admin_approvals"))
+
+@app.post("/admin/user/<uid>/reject")
+@admin_required
+def admin_reject(uid):
+    x = get_user(uid)
+    if x["email"] in ADMINS or not is_pending(x):
+        flash("এই অ্যাকাউন্ট বাতিল করা যাবে না।")
+    else:
+        fs.collection("users").document(uid).delete()
+        alog("reject", uid=uid, email=x["email"], name=x["name"])
+        flash("আবেদন বাতিল করে অ্যাকাউন্ট মুছে দেওয়া হয়েছে।")
+    return redirect(url_for("admin_approvals"))
 
 @app.post("/admin/user/<uid>/ban")
 @admin_required
