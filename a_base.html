@@ -62,6 +62,7 @@ button:focus-visible,a:focus-visible,input:focus-visible,select:focus-visible{ou
   <a class="br" href="{{ url_for('admin') }}">লাকি মেলা</a>
   <nav>
     <a href="{{ url_for('admin') }}" class="{{ 'on' if ep=='admin' }}">ড্যাশবোর্ড</a>
+    <a href="{{ url_for('admin_approvals') }}" class="{{ 'on' if ep=='admin_approvals' }}">অ্যাপ্রুভাল</a>
     <a href="{{ url_for('admin_users') }}" class="{{ 'on' if ep in ('admin_users','admin_user') }}">ইউজার</a>
     <a href="{{ url_for('admin_draws') }}" class="{{ 'on' if ep in ('admin_draws','admin_draw') }}">ড্র ও টিকিট</a>
     <a href="{{ url_for('admin_notices') }}" class="{{ 'on' if ep=='admin_notices' }}">নোটিশ</a>
