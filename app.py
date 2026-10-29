@@ -7,8 +7,10 @@ from zoneinfo import ZoneInfo
 import firebase_admin
 from firebase_admin import credentials, firestore
 from google.api_core.exceptions import AlreadyExists
+from markupsafe import Markup, escape
 from flask import (Flask, g, render_template, request, redirect, url_for, session, flash,
                    jsonify, abort, send_from_directory)
+from i18n import to_en
 from werkzeug.security import generate_password_hash, check_password_hash
 
 app = Flask(__name__, template_folder=".", static_folder=None)  # flat layout: all files in repo root
@@ -56,6 +58,10 @@ def short(v):
 @app.template_filter("taka")
 def taka(p):
     return bn("{:,}".format(int(int(p) * get_rate() / 1000)))
+@app.template_filter("keep")
+def keep(v):
+    # text written by admins/users: never translated (markers are removed before the page is sent)
+    return Markup("\u2063" + str(escape(v)) + "\u2063")
 @app.template_filter("pad4")
 def pad4(v):
     return bn(str(v).zfill(4))
@@ -312,6 +318,21 @@ def last_result():
     return cget("last", 60, load)
 
 # ---------- auth ----------
+@app.route("/lang/<code>")
+def set_lang(code):
+    session["lang"] = "en" if code == "en" else "bn"
+    session.permanent = True
+    back = urlparse(request.referrer or "")
+    return redirect(back.path or "/" if back.netloc == request.host else "/")
+
+@app.after_request
+def _translate(resp):
+    # English version: translate rendered user pages (admin pages stay Bengali)
+    if resp.mimetype == "text/html" and not request.path.startswith("/admin") and resp.status_code < 400:
+        h = resp.get_data(as_text=True)
+        resp.set_data(to_en(h) if session.get("lang") == "en" else h.replace("\u2063", ""))
+    return resp
+
 @app.route("/r/<code>")
 def ref(code):
     session["ref"] = code.upper()[:12]
@@ -780,7 +801,7 @@ def admin_required(f):
 @app.context_processor
 def _inj():
     u = me()
-    return dict(admin_email=u["email"] if u else "")
+    return dict(admin_email=u["email"] if u else "", lang=session.get("lang", "bn"))
 
 def cnt(q):
     try:
@@ -835,11 +856,21 @@ def admin_users():
     elif flt == "banned":
         rows = [snap(s) for s in U.where("banned", "==", True).limit(50).stream()]
     else:
-        rows = [snap(s) for s in U.order_by(col, direction=DESC).limit(50).stream()]
-        if col == "points":
+        PAGE = 20  # small pages keep reads low; "আরও দেখুন" loads the next ones
+        qq = U.order_by(col, direction=DESC)
+        after = request.args.get("after", "")
+        if after:
+            sn = U.document(after).get()
+            if sn.exists:
+                qq = qq.start_after(sn)
+        rows = [snap(s) for s in qq.limit(PAGE + 1).stream()]
+        more = rows[PAGE - 1]["id"] if len(rows) > PAGE else ""
+        rows = rows[:PAGE]
+        if col == "points" and not after:
             for i, r in enumerate(rows[:3]):
                 r["rank"] = i + 1
-    return render_template("a_users.html", rows=rows, q=q, f=flt, s=srt)
+        return render_template("a_users.html", rows=rows, q=q, f=flt, s=srt, more=more)
+    return render_template("a_users.html", rows=rows, q=q, f=flt, s=srt, more="")
 
 @app.route("/admin/user/<uid>")
 @admin_required
