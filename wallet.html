@@ -1,7 +1,7 @@
 {% extends "base.html" %}
 {% block content %}
 <h2>ওয়ালেট</h2>
-<div class="row2"><div class="st"><b>{{ u.points|bn }}</b><span>পয়েন্ট</span></div><div class="st"><b>৳{{ u.points|taka }}</b><span>আনুমানিক মূল্য (শুধু দেখার জন্য)</span></div></div>
+<div class="row2"><div class="st"><b>{{ u.points|bn }}</b><span>পয়েন্ট</span></div><div class="st"><b>৳{{ u.points|taka }}</b><span>আনুমানিক মূল্য</span></div></div>
 <div class="lt" style="margin:12px 0"><a href="{{ url_for('wallet') }}" class="{{ 'on' if tab=='send' }}">পাঠান</a><a href="{{ url_for('wallet', t='recv') }}" class="{{ 'on' if tab=='recv' }}">গ্রহণ করুন</a></div>
 {% if pend %}<div class="fl">অ্যাডমিন অ্যাপ্রুভ করার পর পাঠানো যাবে।</div>{% endif %}
 {% if tab=='send' %}
