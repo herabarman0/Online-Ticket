@@ -1,6 +1,7 @@
 {% extends "base.html" %}
 {% block content %}
 <h2>বিজয়ী</h2><p class="sub">সাম্প্রতিক ড্রের ফলাফল</p>
-{% for w in rows %}<div class="li wn {{ 'me' if w.uid==u.id }}"><div class="rk">★</div><div class="nmx">{{ w.name }}{{ ' (আপনি)' if w.uid==u.id }}<small>{{ w.title }} · টিকিট #{{ w.winner_num|pad4 }} · {{ w.ends|when }}</small></div><b class="v">{{ w.prize|m }}</b></div>
+{% for w in rows %}<div class="li wn {{ 'me' if w.uid==u.id }}"><div class="rk">★</div><div class="nmx">{{ w.name }}{{ ' (আপনি)' if w.uid==u.id }}<small>{{ w.title }}{{ ' · ' ~ (['১ম','২য়','৩য়'][w.place-1]) if w.place }} · টিকিট #{{ w.winner_num|pad4 }} · {{ w.ends|when }}</small>
+{% if w.uid==u.id %}{% if w.claim is none %}<a href="{{ url_for('claim', rid=w.id) }}" class="btn sun sm" style="display:inline-block;margin-top:6px">পুরস্কার দাবি করুন</a>{% else %}<small style="color:var(--teal)">{{ 'তথ্য জমা হয়েছে' if w.claim=='pending' else 'পুরস্কার পাঠানো হয়েছে' }}</small>{% endif %}{% endif %}</div><b class="v">{{ w.prize|m }}</b></div>
 {% else %}<div class="empty">প্রথম ড্রের ফলাফল এখানে দেখা যাবে।</div>{% endfor %}
 {% endblock %}
