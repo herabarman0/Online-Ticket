@@ -1,0 +1,129 @@
+# English version of the user-facing site. Text is translated after the page is rendered
+# (so Bengali stays the default and the templates need no changes). Admin pages stay Bengali.
+import re
+
+# sentences with changing parts (names / numbers): regex -> English
+RX = [
+    (r"([^<>\n]*?)-কে ([০-৯,]+) পয়েন্ট পাঠানো হয়েছে \(ফি ([০-৯,]+)\)।", r"Sent \2 points to \1 (fee \3)."),
+    (r"পরিমাণ কমপক্ষে ([০-৯,]+) ও সর্বোচ্চ ([০-৯,]+) পয়েন্ট হতে হবে।", r"The amount must be between \1 and \2 points."),
+    (r"পয়েন্ট কম আছে। পাঠাতে লাগবে ([০-৯,]+) \(ফি সহ\)।", r"Not enough points. You need \1 including the fee."),
+    (r"([০-৯,]+)টি টিকিট পেয়েছেন।", r"You got \1 ticket(s)."),
+    (r"([০-৯,]+) পয়েন্ট বোনাস পেয়েছেন।", r"You received a bonus of \1 points."),
+    (r"আজকের বোনাস নিন \+([০-৯,]+)", r"Claim today's bonus +\1"),
+    (r"বিজ্ঞাপন দেখুন, \+([০-৯,]+) পয়েন্ট", r"Watch an ad, +\1 points"),
+    (r"আজ আর ([০-৯,]+)টি বাকি", r"\1 left today"),
+    (r"বন্ধুকে ডাকুন, ([০-৯,]+) পয়েন্ট পান", r"Invite a friend, get \1 points"),
+    (r"সে পাবে ([০-৯,]+) পয়েন্ট। যোগ দিয়েছেন ([০-৯,]+) জন।", r"They get \1 points. Joined so far: \2."),
+    (r"আপনার কাটবে ([০-৯,]+) পয়েন্ট \(ফি ([০-৯,]+)\)", r"You will pay \1 points (fee \2)"),
+    (r"কত পয়েন্ট \(কমপক্ষে ([০-৯,]+)\)", r"How many points (minimum \1)"),
+    (r"([০-৯,]+)/([০-৯,]+) টিকিট বিক্রি", r"\1/\2 tickets sold"),
+    (r"([০-৯,]+) টিকিট বিক্রি", r"\1 tickets sold"),
+    (r"আপনার ([০-৯,]+)/([০-৯,]+) টিকিট", r"Your tickets: \1/\2"),
+    (r"([০-৯:/, ]+(?:AM|PM)) এ ড্র · ([০-৯,]+)/([০-৯,]+) বিক্রি · আপনার ([০-৯,]+)/([০-৯,]+)", r"Draw at \1 · \2/\3 sold · yours \4/\5"),
+    (r"([০-৯:/, ]+(?:AM|PM)) এ ড্র", r"Draw at \1"),
+    (r"([০-৯,]+) পয়েন্ট জিতেছেন।", r"You won \1 points."),
+    (r"৭ দিনের স্ট্রিক", r"7-day streak"),
+]
+
+EN = {
+    "অথবা": "or", "অবস্থা": "Status", "অভিনন্দন! আপনি জিতেছেন, পুরস্কার যোগ হয়েছে।": "Congratulations! You won, the prize has been added.",
+    "অভিনন্দন! আপনি বিজয়ী": "Congratulations! You are a winner",
+    "অ্যাকাউন্ট অ্যাপ্রুভ হয়নি": "Account not approved",
+    "অ্যাকাউন্ট অ্যাপ্রুভালের অপেক্ষায় (পেন্ডিং)। অ্যাপ্রুভ হলেই ১০০ পয়েন্ট বোনাস পাবেন।": "Your account is pending approval. You get a 100-point bonus once it is approved.",
+    "অ্যাকাউন্ট খুলতে বয়স কমপক্ষে ১৮ হতে হবে।": "You must be at least 18 to open an account.",
+    "অ্যাকাউন্ট খুলুন": "Create account",
+    "অ্যাকাউন্ট খোলা হয়েছে। অ্যাডমিন অ্যাপ্রুভ করলে ১০০ পয়েন্ট বোনাস পাবেন।": "Account created. You get a 100-point bonus when the admin approves it.",
+    "অ্যাডমিন অ্যাপ্রুভ করলে ১০০ পয়েন্ট বোনাস পাবেন।": "You get a 100-point bonus when the admin approves your account.",
+    "অ্যাডমিন অ্যাপ্রুভ করার পর টিকিট কিনতে পারবেন।": "You can buy tickets after the admin approves your account.",
+    "অ্যাডমিন অ্যাপ্রুভ করার পর পয়েন্ট পাঠাতে পারবেন।": "You can send points after the admin approves your account.",
+    "অ্যাডমিন অ্যাপ্রুভ করার পর পাঠানো যাবে।": "You can send points after the admin approves your account.",
+    "অ্যাডমিন অ্যাপ্রুভ করার পর বোনাস নিতে পারবেন।": "You can claim bonuses after the admin approves your account.",
+    "অ্যাডমিন প্যানেল": "Admin panel", "অ্যাপ্রুভড": "Approved", "আইডি কপি করুন": "Copy ID", "আইডি:": "ID:", "আইডি": "ID",
+    "আজকের বোনাস নেওয়া হয়ে গেছে।": "Today's bonus is already claimed.",
+    "আজকের বোনাস নেওয়া হয়েছে": "Today's bonus claimed", "আজকের সীমা শেষ": "Daily limit reached", "আজ": "Today",
+    "আনুমানিক মূল্য": "Approx. value", "আপনার অ্যাকাউন্ট অ্যাডমিনের অ্যাপ্রুভালের অপেক্ষায়। অ্যাপ্রুভ হলে ১০০ পয়েন্ট বোনাস পাবেন।": "Your account is waiting for admin approval. You get a 100-point bonus once approved.",
+    "আপনার অ্যাকাউন্ট বন্ধ করা হয়েছে। অ্যাডমিনের সাথে যোগাযোগ করুন।": "Your account has been suspended. Please contact the admin.",
+    "আপনার অ্যাকাউন্ট বন্ধ করা হয়েছে।": "Your account has been suspended.",
+    "আপনার তথ্য জমা হয়েছে। অ্যাডমিন শীঘ্রই যোগাযোগ করবেন।": "Your details are submitted. The admin will contact you soon.",
+    "আপনার বাকি তথ্য দিন": "Please complete your details", "আপনার-আইডি": "your-id", "আপনি!": "You!", "আপনি": "You", "আপনি)": "you)",
+    "আপনার": "Your", "আমার আইডি": "My ID", "আমার টিকিট": "My tickets", "আমার তথ্য": "My details",
+    "আমি সম্মতি দিচ্ছি, আমার তথ্য অ্যাকাউন্ট যাচাই ও পুরস্কার পাঠাতে ব্যবহার করা হবে।": "I agree that my details may be used to verify my account and to send prizes.",
+    "আমি সম্মতি দিচ্ছি, পুরস্কার পাঠাতে ও যোগাযোগের জন্য এই তথ্য ব্যবহার করা হবে।": "I agree that these details may be used to send the prize and to contact me.",
+    "আলাদা করে কাটা হবে।": "is charged separately.",
+    "ইউজার আইডি": "User ID", "ইউজার পাওয়া যায়নি।": "User not found.", "ইমেইল বা পাসওয়ার্ড ঠিক নয়।": "Email or password is incorrect.", "ইমেইল": "Email",
+    "এ ড্র ·": "draw ·", "এ ড্র": "draw",
+    "এই আইডি দিলে অন্য ইউজার আপনাকে পয়েন্ট পাঠাতে পারবে": "Share this ID so other users can send you points",
+    "এই আইডিতে এখন পয়েন্ট পাঠানো যাবে না।": "Points cannot be sent to this ID right now.",
+    "এই আইডির কোনো ইউজার পাওয়া যায়নি।": "No user found with this ID.",
+    "এই ইমেইলে অ্যাকাউন্ট খুলতে হবে না, সরাসরি লগইন করুন।": "No need to sign up with this email, just log in.",
+    "এই ইমেইলে আগেই অ্যাকাউন্ট আছে। লগইন করুন।": "An account with this email already exists. Please log in.",
+    "এই ড্র আর চালু নেই।": "This draw is no longer open.",
+    "এই ড্র বাতিল হয়েছে। টিকিটের পয়েন্ট ফেরত দেওয়া হয়েছে।": "This draw was cancelled. Ticket points have been refunded.",
+    "এই ড্র-এ কেউ টিকিট কেনেনি, তাই বিজয়ী নেই।": "Nobody bought a ticket in this draw, so there is no winner.",
+    "এই পুরস্কার আপনার নয়।": "This prize is not yours.",
+    "একসাথে তিনজন জেতেন": "Three people win together",
+    "এখন কোনো ড্র চালু নেই। নতুন ড্র শীঘ্রই আসছে।": "No draw is open right now. A new draw is coming soon.",
+    "এখন পুরস্কার নেই": "No rewards available now",
+    "এখন বোনাস দেওয়া যাচ্ছে না, পরে চেষ্টা করুন।": "Bonuses are unavailable right now, please try later.",
+    "এখনো কোনো টিকিট নেই।": "You have no tickets yet.", "এখনো কোনো লেনদেন নেই।": "No transactions yet.",
+    "ও সর্বোচ্চ": "and at most", "ওয়ালেট": "Wallet", "কত পয়েন্ট (কমপক্ষে": "How many points (minimum",
+    "কপি হয়েছে": "Copied", "কপি": "Copy", "কমান": "Decrease", "কয়টি টিকিট?": "How many tickets?",
+    "গুগল লগইন হয়নি, আবার চেষ্টা করুন।": "Google sign-in failed, please try again.", "গ্রহণ করুন": "Receive",
+    "জন।": "people.", "জমা দিতে আগে সম্মতি বক্সে টিক দিন।": "Tick the consent box to submit.", "জমা হচ্ছে…": "Submitting…",
+    "জয়": "Wins", "টি টিকিট পেয়েছেন।": " ticket(s) bought.", "টি বাকি": " left",
+    "টিকিট কিনুন": "Buy tickets", "টিকিট ক্রয়": "Buy tickets", "টিকিট নিন": "Get tickets", "টিকিট বিক্রি": "tickets sold",
+    "টিকিটের সীমা পেরিয়ে যাবে।": "This would exceed the ticket limit.", "টিকিট ·": "tickets ·", "টিকিট": "Tickets",
+    "ঠিকানা": "Address", "ড্র শুরু হতে বাকি": "Time until the draw",
+    "ড্র শুরু হলে সবার ফোনে একই সময়ে ১ মিনিটের স্পিন চলবে। পেজ খোলা রাখুন।": "When the draw starts, a 1-minute spin plays on every phone at the same time. Keep this page open.",
+    "ঢুকুন": "Log in", "তথ্য আগেই জমা দিয়েছেন।": "You have already submitted your details.", "তথ্য জমা দিন": "Submit details",
+    "তথ্য জমা হয়েছে।": "Details submitted.", "তথ্য জমা হয়েছে": "Details submitted",
+    "তথ্য সেভ করুন": "Save details", "তথ্য সেভ হয়েছে।": "Details saved.", "দেখতে চাপুন": "tap to watch", "দেখুন": "Watch",
+    "নতুন অ্যাকাউন্ট": "Sign up", "নতুন ড্র ঘোষণা না হওয়া পর্যন্ত এটি এখানে থাকবে।": "This stays here until a new draw is announced.",
+    "নাম": "Name", "নিচের সম্মতি বক্সে টিক দিন।": "Please tick the consent box below.", "নিজেকে পাঠানো যায় না।": "You cannot send points to yourself.",
+    "পয়েন্ট কম আছে। বোনাস নিন বা রেফার করুন।": "Not enough points. Claim a bonus or refer friends.",
+    "পয়েন্ট জিতেছেন।": "points won.", "পয়েন্ট পাঠান / গ্রহণ করুন": "Send / receive points", "পয়েন্ট পান": "get points",
+    "পয়েন্টে টিকিট কিনুন, প্রতিদিন জেতার সুযোগ নিন।": "Buy tickets with points and get a chance to win every day.",
+    "পয়েন্টের মূল্য": "Points value", "পয়েন্ট হতে হবে।": "points.", "পয়েন্ট (ফি": "points (fee", "পয়েন্ট।": "points.", "পয়েন্ট": "Points",
+    "পাঠান": "Send", "পাসওয়ার্ড": "Password", "পুরস্কার দাবি করুন": "Claim prize", "পুরস্কার দাবি": "Claim prize",
+    "পুরস্কার নিতে বয়স কমপক্ষে ১৮ হতে হবে।": "You must be at least 18 to claim a prize.",
+    "পুরস্কার পাঠানো হয়েছে": "Prize sent", "পুরস্কার পেতে এখনই আপনার তথ্য জমা দিন।": "Submit your details now to receive your prize.",
+    "পুরস্কার)": "prize)", "পুরস্কার:": "prize:", "পুরস্কার": "Prize",
+    "পুরো ঠিকানা লিখুন (গ্রাম/এলাকা, থানা, জেলা সহ)।": "Enter your full address (village/area, thana, district).",
+    "পুরো ঠিকানা": "Full address", "পুরো নাম লিখুন (কমপক্ষে ৩ অক্ষর)।": "Enter your full name (at least 3 letters).",
+    "পুরো নাম, সঠিক ইমেইল ও কমপক্ষে ৬ অক্ষরের পাসওয়ার্ড দিন।": "Enter your full name, a valid email and a password of at least 6 characters.",
+    "পুরো নাম": "Full name", "পেন্ডিং": "Pending", "পেয়েছেন ✓": "Received ✓", "প্রতিদিন বোনাস": "Daily bonus", "প্রতিদিন": "Daily",
+    "প্রথম ড্রের ফলাফল এখানে দেখা যাবে।": "The first draw results will appear here.", "প্রোফাইল": "Profile",
+    "ফলাফল ঘোষণা হচ্ছে…": "Announcing the result…", "ফি সহ)।": "including fee).", "ফি": "Fee",
+    "ফেসবুক প্রোফাইল লিংক": "Facebook profile link", "ফেসবুক": "Facebook", "বন্ধ করুন": "Close", "বয়স (কমপক্ষে ১৮)": "Age (at least 18)",
+    "বয়স কমপক্ষে ১৮ হতে হবে।": "You must be at least 18.", "বয়স": "Age", "বাকি": "left", "বাড়ান": "Increase", "বিক্রি · আপনার": "sold · yours",
+    "বিজয়ী টিকিট": "Winning ticket", "বিজয়ী ★": "Winner ★", "বিজয়ী:": "Winner:", "বিজয়ী": "Winners", "বিশেষ": "Special", "মাসিক": "Monthly",
+    "মেনু": "Menu", "মোট টিকিট": "Total tickets", "মোট": "Total", "মোবাইল নম্বর": "Mobile number", "মোবাইল": "Mobile",
+    "যাকে পাঠাবেন তার আইডি": "Recipient's ID", "রেফার কোড (থাকলে)": "Referral code (if any)", "রেফার লিংক": "Referral link",
+    "রোজ ঢুকলে বোনাস বাড়ে, বন্ধুকে ডাকলেও পয়েন্ট": "Log in daily to grow your bonus, invite friends for points", "রোজ ঢুকলে বোনাস বাড়ে": "log in daily to grow your bonus",
+    "লগআউট": "Log out", "লগইন": "Log in", "লাইভ ড্র দেখুন": "Watch live draw", "লাইভ ড্র": "Live draw", "লাকি মেলা": "Lucky Mela",
+    "লিডারবোর্ড": "Leaderboard", "লোড হচ্ছে…": "Loading…", "শীঘ্রই লাইভ ড্র": "Live draw starting soon", "শীঘ্রই শুরু": "starting soon",
+    "চলছে": "running", "সঠিক ফেসবুক প্রোফাইল লিংক দিন (": "Enter a valid Facebook profile link (", "সঠিক ফেসবুক প্রোফাইল লিংক দিন।": "Enter a valid Facebook profile link.",
+    "সঠিক মোবাইল নম্বর দিন (যেমন ০১৭": "Enter a valid mobile number (e.g. 017", "সঠিক মোবাইল নম্বর দিন (১১ সংখ্যা, যেমন ০১৭": "Enter a valid mobile number (11 digits, e.g. 017",
+    "সবচেয়ে বেশি পয়েন্ট কার?": "Who has the most points?", "সবার সামনে ১ মিনিটের স্পিনে সৎ বিজয়ী বাছাই": "Winners picked fairly in a 1-minute live spin",
+    "সম্মতি বক্সে টিক দিন।": "Please tick the consent box.", "সর্বশেষ বিজয়ী টিকিট": "Latest winning ticket",
+    "সাপ্তাহিক": "Weekly", "সাম্প্রতিক ড্রের ফলাফল": "Recent draw results", "সাম্প্রতিক লেনদেন": "Recent transactions",
+    "সার্ভারে সমস্যা হয়েছে, একটু পরে আবার চেষ্টা করুন।": "Server problem, please try again in a moment.", "সীমা শেষ": "Limit reached",
+    "সে পাবে": "They get", "স্পিন চলছে… বিজয়ী নম্বর খোঁজা হচ্ছে": "Spinning… finding the winning number", "হোম": "Home",
+    "১ম, ২য় ও ৩য়": "1st, 2nd and 3rd", "১ম": "1st", "২য়": "2nd", "৩য়": "3rd", "৩টি পুরস্কার": "3 prizes", "৭ সংখ্যার আইডি": "7-digit ID",
+    "অ্যাকাউন্ট": "Account", "আপনার কাটবে": "You will pay", "কে": "by",
+}
+
+_alt = re.compile("|".join(re.escape(k) for k in sorted(EN, key=len, reverse=True)))
+_rx = [(re.compile(p), r) for p, r in RX]
+_dig = str.maketrans("০১২৩৪৫৬৭৮৯", "0123456789")
+
+def _tr(html):
+    for rx, r in _rx:
+        html = rx.sub(r, html)
+    html = _alt.sub(lambda m: EN[m.group()], html)
+    return html.translate(_dig).replace("।", ".").replace('<html lang="bn">', '<html lang="en">')
+
+def to_en(html):
+    # parts between U+2063 markers are admin/user text and stay as written
+    parts = html.split("\u2063")
+    return "".join(p if i % 2 else _tr(p) for i, p in enumerate(parts))
