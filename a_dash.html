@@ -6,6 +6,8 @@
   <div class="stat hl"><b>{{ (st.users if st.users is not none else '—')|bn }}</b><span>মোট ইউজার</span></div>
   <div class="stat"><b>{{ (st.new if st.new is not none else '—')|bn }}</b><span>আজকের নতুন</span></div>
   <div class="stat"><b>{{ (st.banned if st.banned is not none else '—')|bn }}</b><span>ব্যান করা</span></div>
+  <a class="stat" href="{{ url_for('admin_approvals') }}" style="text-decoration:none"><b>{{ (st.pend if st.pend is not none else '—')|bn }}</b><span>অ্যাপ্রুভালের অপেক্ষায়</span></a>
+  <div class="stat"><b>{{ st.bal|m }}</b><span>অ্যাডমিন পয়েন্ট ব্যালেন্স</span></div>
   <a class="stat" href="{{ url_for('admin_claims') }}" style="text-decoration:none"><b>{{ (st.claims if st.claims is not none else '—')|bn }}</b><span>অপেক্ষমাণ পুরস্কার দাবি</span></a>
 </div>
 <div class="card"><h2>চলমান ড্র</h2><div class="sc"><table class="rt"><thead><tr><th>ড্র</th><th>পুরস্কার</th><th>বিক্রি</th><th>শেষ সময়</th><th></th></tr></thead><tbody>
@@ -20,3 +22,4 @@
     <tr><td data-l="বিজয়ী"><a href="{{ url_for('admin_user', uid=w.uid) }}">{{ w.name }}</a></td><td data-l="{{ w.title }}" class="r">{{ w.prize|m }}</td></tr>{% else %}<tr><td>এখনো কেউ জেতেনি</td></tr>{% endfor %}</tbody></table></div></div>
 </div>
 {% endblock %}
+
