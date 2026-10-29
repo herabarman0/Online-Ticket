@@ -3,7 +3,7 @@
   {% if w.state=='need' %}
   <span class="t" style="color:var(--ink)">অভিনন্দন! আপনি বিজয়ী</span>
   <div class="amt" style="font-size:2.4rem">টিকিট #{{ w.winner_num|pad4 }}</div>
-  <div class="jinfo" style="color:var(--ink)">{{ w.title }} · {{ w.prize|m }} পয়েন্ট জিতেছেন।<br>পুরস্কার পেতে এখনই আপনার তথ্য জমা দিন।</div>
+  <div class="jinfo" style="color:var(--ink)">{{ w.title }}{{ ' · ' ~ (['১ম','২য়','৩য়'][w.place-1]) ~ ' পুরস্কার' if w.place }} · {{ w.prize|m }} পয়েন্ট জিতেছেন।<br>পুরস্কার পেতে এখনই আপনার তথ্য জমা দিন।</div>
   <a class="btn" style="display:block;text-align:center;margin-top:12px;position:relative;z-index:1" href="{{ url_for('claim', rid=w.id) }}">তথ্য জমা দিন</a>
   {% else %}
   <span class="t" style="color:var(--ink)">বিজয়ী টিকিট #{{ w.winner_num|pad4 }}</span>
