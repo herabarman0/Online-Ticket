@@ -5,7 +5,7 @@
 {% if d.status=='open' %}<form method="post" action="{{ url_for('admin_finish', did=d.id) }}" onsubmit="return confirm('১৫ সেকেন্ড পরে সবার ফোনে লাইভ ড্র শুরু হবে। নিশ্চিত?')"><button class="bt pk">এখনই লাইভ ড্র শুরু করুন</button></form>{% endif %}</div>
 {% if d.status=='open' %}<form method="post" action="{{ url_for('admin_cancel', did=d.id) }}" onsubmit="return confirm('ড্র বাতিল হবে ও সবার টিকিটের পয়েন্ট ফেরত যাবে। নিশ্চিত?')" style="margin-bottom:14px"><button class="bt rd">ড্র বাতিল করুন (পয়েন্ট ফেরত)</button></form>{% endif %}
 <div class="g">
-  <div class="stat hl"><b>{{ d.prize|m }}</b><span>পুরস্কার</span></div><div class="stat"><b>{{ d.sold|bn }}/{{ d.cap|bn }}</b><span>টিকিট বিক্রি</span></div>
+  <div class="stat hl"><b style="font-size:1.2rem">{{ d|prizeline }}</b><span>পুরস্কার</span></div><div class="stat"><b>{{ d.sold|bn }}/{{ d.cap|bn }}</b><span>টিকিট বিক্রি</span></div>
   <div class="stat"><b>{{ d.cost|bn }}</b><span>টিকিটের দাম</span></div>
   <div class="stat"><b>{% if d.status=='open' %}চলছে{% elif d.status=='cancelled' %}বাতিল{% elif d.status=='drawing' %}ড্র চলছে{% elif d.winner_num %}#{{ d.winner_num|pad4 }}{% else %}বিজয়ী নেই{% endif %}</b><span>{{ 'অবস্থা' if d.status=='open' else 'বিজয়ী টিকিট' }}</span></div></div>
 <div class="card"><h2>টিকিটের তালিকা (সিরিয়াল অনুযায়ী, প্রথম ২০০টি)</h2><div class="sc"><table class="rt"><thead><tr><th>সিরিয়াল</th><th>ইউজার</th><th>ইমেইল</th><th>ফোন</th></tr></thead><tbody>
