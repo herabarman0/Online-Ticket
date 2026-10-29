@@ -6,8 +6,9 @@
 <title>{% block title %}লাকি মেলা{% endblock %}</title>
 <link href="https://fonts.googleapis.com/css2?family=Galada&family=Hind+Siliguri:wght@400;500;700&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+<link rel="stylesheet" href="{{ url_for('static', filename='desktop.css') }}">
 </head>
-<body>
+<body class="p-{{ request.endpoint }}">
 <div class="app">
 {% block shell %}
   <div class="bar"><a class="brand" href="{{ url_for('home') }}">লাকি মেলা</a><div class="chip"><span class="coin">৳</span><b id="pts">{{ u.points|bn }}</b></div></div>
@@ -21,6 +22,9 @@
     <a href="{{ url_for('ticket') }}" class="mid {{ 'on' if request.endpoint in ('ticket','buy') }}"><span class="o"><svg viewBox="0 0 24 24"><path d="M4 7h16v3a2 2 0 0 0 0 4v3H4v-3a2 2 0 0 0 0-4z"/></svg></span>টিকিট</a>
     <a href="{{ url_for('winners') }}" class="{{ 'on' if request.endpoint=='winners' }}"><svg viewBox="0 0 24 24"><circle cx="12" cy="9" r="5"/><path d="M9 13.5L7 21l5-3 5 3-2-7.5"/></svg>বিজয়ী</a>
     <a href="{{ url_for('profile') }}" class="{{ 'on' if request.endpoint=='profile' }}"><svg viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/></svg>প্রোফাইল</a>
+    <span class="sep dsk"></span>
+    <a class="dsk" href="{{ url_for('wallet') }}"><svg viewBox="0 0 24 24"><path d="M3 7h16a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2zM3 7l2-3h12v3M16 13h2"/></svg>ওয়ালেট</a>
+    <a class="dsk" href="{{ url_for('logout') }}"><svg viewBox="0 0 24 24"><path d="M9 4H5v16h4M16 8l4 4-4 4M20 12H9"/></svg>লগআউট</a>
   </nav>
 {% endblock %}
 </div>
