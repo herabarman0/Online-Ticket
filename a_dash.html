@@ -7,9 +7,18 @@
   <div class="stat"><b>{{ (st.new if st.new is not none else '—')|bn }}</b><span>আজকের নতুন</span></div>
   <div class="stat"><b>{{ (st.banned if st.banned is not none else '—')|bn }}</b><span>ব্যান করা</span></div>
   <a class="stat" href="{{ url_for('admin_approvals') }}" style="text-decoration:none"><b>{{ (st.pend if st.pend is not none else '—')|bn }}</b><span>অ্যাপ্রুভালের অপেক্ষায়</span></a>
-  <div class="stat"><b>{{ st.bal|m }}</b><span>অ্যাডমিন পয়েন্ট ব্যালেন্স</span></div>
+  <div class="stat hl"><b>{{ st.bal|short }}</b><span>অ্যাডমিন পয়েন্ট ব্যালেন্স</span></div>
   <a class="stat" href="{{ url_for('admin_claims') }}" style="text-decoration:none"><b>{{ (st.claims if st.claims is not none else '—')|bn }}</b><span>অপেক্ষমাণ পুরস্কার দাবি</span></a>
 </div>
+<div class="g2">
+<div class="card"><h2>অ্যাডমিন ব্যালেন্স বাড়ান / কমান</h2>
+  <p class="mut sm">ইউজারের সব বোনাস, বিজ্ঞাপন, রেফার ও অ্যাপ্রুভ পয়েন্ট এখান থেকে কাটে। ব্যালেন্স: <b>{{ st.bal|short }}</b></p>
+  <form method="post" action="{{ url_for('admin_treasury') }}"><label for="ta">পরিমাণ (যেমন 500000, 100M, 1B)</label><input id="ta" name="amount" required>
+    <p class="row"><button class="bt pk" name="op" value="add">বাড়ান</button><button class="bt rd" name="op" value="sub">কমান</button></p></form></div>
+<div class="card"><h2>পয়েন্টের মূল্য</h2>
+  <p class="mut sm">ইউজার শুধু দেখবে। এখন ১০০০ পয়েন্ট = <b>৳{{ st.rate|bn }}</b></p>
+  <form method="post" action="{{ url_for('admin_rate') }}"><label for="rt">১০০০ পয়েন্ট = কত টাকা</label><input id="rt" name="rate" required inputmode="numeric" value="{{ st.rate }}">
+    <p><button class="bt">সেভ করুন</button></p></form></div></div>
 <div class="card"><h2>চলমান ড্র</h2><div class="sc"><table class="rt"><thead><tr><th>ড্র</th><th>পুরস্কার</th><th>বিক্রি</th><th>শেষ সময়</th><th></th></tr></thead><tbody>
 {% for d in draws %}<tr><td data-l="ড্র">{{ d.title }}</td><td data-l="পুরস্কার">{{ d.prize|m }}</td><td data-l="বিক্রি">{{ d.sold|bn }}/{{ d.cap|bn }}</td><td data-l="শেষ সময়">{{ d.ends|when }}</td><td class="r"><a class="bt sm gh" href="{{ url_for('admin_draw', did=d.id) }}">খুলুন</a></td></tr>
 {% else %}<tr><td>কোনো চলমান ড্র নেই</td></tr>{% endfor %}</tbody></table></div></div>
@@ -22,4 +31,3 @@
     <tr><td data-l="বিজয়ী"><a href="{{ url_for('admin_user', uid=w.uid) }}">{{ w.name }}</a></td><td data-l="{{ w.title }}" class="r">{{ w.prize|m }}</td></tr>{% else %}<tr><td>এখনো কেউ জেতেনি</td></tr>{% endfor %}</tbody></table></div></div>
 </div>
 {% endblock %}
-
