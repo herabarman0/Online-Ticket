@@ -2,16 +2,18 @@
 {% block title %}ড্র ও টিকিট{% endblock %}
 {% block content %}
 <div class="hd"><h1>ড্র ও টিকিট</h1></div>
-<div class="card"><h2>নতুন ড্র তৈরি করুন</h2><p class="mut sm">ড্র নিজে থেকে তৈরি হয় না। দাম, পুরস্কার ও সময় আপনি ঠিক করবেন। সময় হলে সবার ফোনে ১ মিনিটের লাইভ স্পিন চলবে।</p>
+<div class="card"><h2>নতুন ড্র তৈরি করুন</h2><p class="mut sm">ড্র নিজে থেকে তৈরি হয় না। দাম, পুরস্কার (সর্বোচ্চ ৩টি) ও সময় আপনি ঠিক করবেন। পুরস্কারের মোট পয়েন্ট ড্র বানানোর সময় অ্যাডমিন ব্যালেন্স থেকে আলাদা হয়, টিকিটের টাকা ব্যালেন্সে জমা হয়। সময় হলে সবার ফোনে ১ মিনিটের লাইভ স্পিন চলবে।</p>
 <form method="post" action="{{ url_for('admin_draw_new') }}"><div class="row">
   <div><label for="t">নাম</label><input id="t" name="title" required maxlength="60"></div>
-  <div><label for="pz">পুরস্কার (পয়েন্ট)</label><input id="pz" name="prize" required inputmode="numeric"></div>
-  <div><label for="c">টিকিটের দাম (পয়েন্ট)</label><input id="c" name="cost" required inputmode="numeric"></div>
+  <div><label for="pz">১ম পুরস্কার</label><input id="pz" name="prize" required></div>
+  <div><label for="pz2">২য় (ঐচ্ছিক)</label><input id="pz2" name="prize2"></div>
+  <div><label for="pz3">৩য় (ঐচ্ছিক)</label><input id="pz3" name="prize3"></div>
+  <div><label for="c">টিকিটের দাম (পয়েন্ট)</label><input id="c" name="cost" required></div>
   <div><label for="cp">মোট টিকিট</label><input id="cp" name="cap" required inputmode="numeric"></div>
   <div><label for="e">শেষ সময়</label><input id="e" name="ends" type="datetime-local" required></div>
   <button class="bt pk">তৈরি করুন</button></div></form></div>
 <div class="card"><div class="sc"><table class="rt"><thead><tr><th>ড্র</th><th>ধরন</th><th>পুরস্কার</th><th>বিক্রি</th><th>শেষ সময়</th><th>অবস্থা</th><th></th></tr></thead><tbody>
-{% for d in rows %}<tr><td data-l="ড্র">{{ d.title }}</td><td data-l="ধরন">{{ 'আপনার ড্র' if d.kind=='custom' else 'পুরোনো স্বয়ংক্রিয় (' ~ KL.get(d.kind, d.kind) ~ ')' }}</td><td data-l="পুরস্কার">{{ d.prize|m }}</td><td data-l="বিক্রি">{{ d.sold|bn }}/{{ d.cap|bn }}</td><td data-l="শেষ সময়">{{ d.ends|when }}</td>
+{% for d in rows %}<tr><td data-l="ড্র">{{ d.title }}</td><td data-l="ধরন">{{ 'আপনার ড্র' if d.kind=='custom' else 'পুরোনো স্বয়ংক্রিয় (' ~ KL.get(d.kind, d.kind) ~ ')' }}</td><td data-l="পুরস্কার">{{ d|prizeline }}</td><td data-l="বিক্রি">{{ d.sold|bn }}/{{ d.cap|bn }}</td><td data-l="শেষ সময়">{{ d.ends|when }}</td>
   <td data-l="অবস্থা">{% if d.status=='open' %}<span class="bd ok">চলছে</span>{% elif d.status=='cancelled' %}<span class="bd bad">বাতিল</span>{% elif d.status=='drawing' %}<span class="bd gold">ড্র চলছে</span>{% else %}<span class="bd mu">শেষ</span>{% endif %}</td><td class="r"><a class="bt sm gh" href="{{ url_for('admin_draw', did=d.id) }}">খুলুন</a></td></tr>
 {% else %}<tr><td>কোনো ড্র নেই</td></tr>{% endfor %}</tbody></table></div></div>
 {% endblock %}
