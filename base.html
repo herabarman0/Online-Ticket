@@ -11,7 +11,7 @@
 <body class="p-{{ request.endpoint }}">
 <div class="app">
 {% block shell %}
-  <div class="bar"><a class="brand" href="{{ url_for('home') }}">লাকি মেলা</a><div class="chip"><span class="coin">৳</span><b id="pts">{{ u.points|bn }}</b></div></div>
+  <div class="bar"><a class="brand" href="{{ url_for('home') }}">লাকি মেলা</a><div class="barr"><a class="lang" href="{{ url_for('set_lang', code='bn' if lang=='en' else 'en') }}" aria-label="Language">{{ 'বাংলা' if lang=='en' else 'EN' }}</a><div class="chip"><span class="coin">৳</span><b id="pts">{{ u.points|bn }}</b></div></div></div>
   <div class="scroll">
     {% for m in get_flashed_messages() %}<div class="fl" role="status">{{ m }}</div>{% endfor %}
     {% block content %}{% endblock %}
