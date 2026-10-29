@@ -14,7 +14,7 @@
 <h2>লাইভ ড্র</h2>
 <div class="lv">
   <div class="t">{{ d.title }}</div>
-  <div class="pz">{{ d.prize|m }} পয়েন্ট</div>
+  <div class="pz">{{ d.prize|m }} পয়েন্ট</div>{% if d.prizes and d.prizes|length>1 %}<div style="font-weight:700">{{ d|prizeline }}</div>{% endif %}
   <div class="reel" id="reel" aria-live="off">০০০০</div>
   <div class="msg" id="msg" role="status">লোড হচ্ছে…</div>
 </div>
@@ -47,7 +47,8 @@ function frame(){
     if(S.winner_num){reel.textContent=pad(S.winner_num);reel.className="reel stop"}
     if(S.status==="done"){done=true;
      if(!S.winner_num){reel.textContent="— — — —";msg.textContent="এই ড্র-এ কেউ টিকিট কেনেনি, তাই বিজয়ী নেই।"}
-     else{msg.innerHTML="বিজয়ী টিকিট #"+pad(S.winner_num)+"<br>"+(S.mine?"অভিনন্দন! আপনিই বিজয়ী, পুরস্কার যোগ হয়েছে।":"বিজয়ী: "+S.winner);if(t<S.spin+30)confetti()}
+     else{var P=["১ম","২য়","৩য়"],L=(S.winners||[]).map(function(w){return P[w.place-1]+" পুরস্কার: #"+pad(w.num)+" — "+(w.mine?"আপনি!":w.name)+" ("+bn(w.prize)+")"});
+      msg.innerHTML=L.join("<br>")+(S.mine?"<br><b>অভিনন্দন! আপনি জিতেছেন, পুরস্কার যোগ হয়েছে।</b>":"");if(t<S.spin+30)confetti()}
     }else{msg.textContent="ফলাফল ঘোষণা হচ্ছে…";if(Date.now()-lastPoll>1500)load()}
    }else{if(Date.now()-lastPoll>1500)load()}
   }
