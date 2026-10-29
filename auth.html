@@ -3,8 +3,12 @@
 {% block shell %}
 <style>.login{justify-content:flex-start!important;padding-bottom:40px}.login h1{font-size:2.4rem}.login p{margin:4px 0 14px}.lt{position:sticky;top:0;z-index:2;padding:6px 0;background:var(--bg)}</style>
 <div class="login" style="position:static;min-height:100dvh">
-  <h1>লাকি মেলা</h1>
-  <p>পয়েন্টে টিকিট কিনুন, প্রতিদিন জেতার সুযোগ নিন।</p>
+  <section class="au-hero">
+    <h1>লাকি মেলা</h1>
+    <p>পয়েন্টে টিকিট কিনুন, প্রতিদিন জেতার সুযোগ নিন।</p>
+    <ul class="au-feat"><li><b>লাইভ ড্র</b>সবার সামনে ১ মিনিটের স্পিনে সৎ বিজয়ী বাছাই</li><li><b>৩টি পুরস্কার</b>১ম, ২য় ও ৩য় — একসাথে তিনজন জেতেন</li><li><b>প্রতিদিন বোনাস</b>রোজ ঢুকলে বোনাস বাড়ে, বন্ধুকে ডাকলেও পয়েন্ট</li></ul>
+  </section>
+  <div class="au-form">
   <div class="lt"><a href="{{ url_for('login') }}" class="{{ 'on' if mode=='login' }}">লগইন</a><a href="{{ url_for('signup') }}" class="{{ 'on' if mode=='signup' }}">নতুন অ্যাকাউন্ট</a></div>
   {% for m in get_flashed_messages() %}<div class="fl" role="alert">{{ m }}</div>{% endfor %}
   <form class="f" method="post">
@@ -24,6 +28,7 @@
     <div id="g_id_onload" data-client_id="{{ gcid }}" data-callback="onGoogle" data-auto_prompt="false"></div>
     <div class="g_id_signin" data-type="standard" data-size="large" data-text="continue_with" data-width="300"></div>{% endif %}
   </form>
+  </div>
 </div>
 {% if gcid %}
 <script src="https://accounts.google.com/gsi/client" async defer></script>
