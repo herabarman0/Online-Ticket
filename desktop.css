@@ -1,5 +1,9 @@
 /* Desktop layout (>=900px). The phone layout in style.css is untouched. */
-.dsk{display:none}
+.dsk,.tabs .dsk{display:none}
+.barr{display:flex;align-items:center;gap:10px}.lang{background:var(--glass);color:#fff;border-radius:99px;padding:6px 14px;font-weight:700;font-size:.85rem;text-decoration:none}
+.mini{display:flex;gap:10px;margin:12px 0}.mini div{flex:1;background:var(--glass);border-radius:14px;padding:9px 14px;color:var(--soft);font-size:.92rem;text-align:center}.mini b{color:#fff;font-size:1.25rem;margin-right:4px}
+.two{display:flex;gap:10px;margin-top:6px}.two .btn{flex:1;display:block;text-align:center;margin:0}
+.streak,.ad{margin-top:12px}
 .row2{margin-bottom:12px}
 .p-ticket .scroll>h2+h2{margin-top:22px}
 .au-feat{display:none}
@@ -15,8 +19,8 @@
  .tabs a.on,.tabs a.mid.on{background:rgba(255,197,61,.18);color:var(--sun)}
  .tabs .mid span.o,.tabs .mid.on span.o{width:auto;height:auto;margin:0;background:none;box-shadow:none;border-radius:0;color:inherit;display:inline-flex}
  .tabs .mid{order:0}
- .tabs .dsk{display:flex}
- .tabs .sep{height:1px;background:rgba(255,255,255,.12);margin:6px 8px;display:block}
+ .tabs a.dsk{display:flex}
+ .tabs span.sep{display:block;height:1px;background:rgba(255,255,255,.12);margin:6px 8px;display:block}
  .scroll{grid-column:2;grid-row:2;padding:10px 32px 48px}
  .scroll>h2{font-size:1.7rem;margin:6px 0 10px}
  .fl{max-width:900px}
