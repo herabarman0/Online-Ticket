@@ -20,7 +20,7 @@
   <form method="post" action="{{ url_for('admin_rate') }}"><label for="rt">১০০০ পয়েন্ট = কত টাকা</label><input id="rt" name="rate" required inputmode="numeric" value="{{ st.rate }}">
     <p><button class="bt">সেভ করুন</button></p></form></div></div>
 <div class="card"><h2>চলমান ড্র</h2><div class="sc"><table class="rt"><thead><tr><th>ড্র</th><th>পুরস্কার</th><th>বিক্রি</th><th>শেষ সময়</th><th></th></tr></thead><tbody>
-{% for d in draws %}<tr><td data-l="ড্র">{{ d.title }}</td><td data-l="পুরস্কার">{{ d.prize|m }}</td><td data-l="বিক্রি">{{ d.sold|bn }}/{{ d.cap|bn }}</td><td data-l="শেষ সময়">{{ d.ends|when }}</td><td class="r"><a class="bt sm gh" href="{{ url_for('admin_draw', did=d.id) }}">খুলুন</a></td></tr>
+{% for d in draws %}<tr><td data-l="ড্র">{{ d.title }}</td><td data-l="পুরস্কার">{{ d|prizeline }}</td><td data-l="বিক্রি">{{ d.sold|bn }}/{{ d.cap|bn }}</td><td data-l="শেষ সময়">{{ d.ends|when }}</td><td class="r"><a class="bt sm gh" href="{{ url_for('admin_draw', did=d.id) }}">খুলুন</a></td></tr>
 {% else %}<tr><td>কোনো চলমান ড্র নেই</td></tr>{% endfor %}</tbody></table></div></div>
 <div class="g2">
   <div class="card"><h2>সবচেয়ে বেশি পয়েন্ট</h2><div class="sc"><table class="rt"><tbody>{% for x in top %}
