@@ -1,5 +1,6 @@
 {% extends "base.html" %}
 {% block content %}
+{% for n in notes %}<div class="nt" data-id="{{ n.id }}" style="position:relative;border-radius:16px;padding:12px 38px 12px 14px;margin:0 0 12px;font-weight:600;{{ 'background:#FF2E7E;color:#fff' if n.level=='imp' else 'background:#FFC53D;color:#2A0E4A' }}">{{ '📢 ' if n.level=='imp' else '' }}{{ n.text }}{% if n.link %} <a href="{{ n.link }}" style="color:inherit;text-decoration:underline">দেখুন</a>{% endif %}<button type="button" aria-label="বন্ধ করুন" style="position:absolute;right:6px;top:6px;width:30px;height:30px;border:0;background:transparent;color:inherit;font-size:1.3rem;cursor:pointer">×</button></div>{% endfor %}
 {% if live_d %}<a class="ad" style="background:var(--pink);color:#fff;text-decoration:none;margin:0 0 14px" href="{{ url_for('live', did=live_d.id) }}"><div><b>লাইভ ড্র {{ 'চলছে' if live_d.status=='drawing' else 'শীঘ্রই শুরু' }}</b><small style="opacity:.9">{{ live_d.title }} · দেখতে চাপুন</small></div></a>{% endif %}
 {% include "wincards.html" %}
 {% if d %}
@@ -43,6 +44,8 @@ function tick(){if(!ENDS)return;var s=Math.max(0,ENDS-nowS());function p(n){retu
  if(cc&&cn){var near=s<=600;cc.hidden=!near;cn.hidden=near;if(near)document.getElementById("cc2").textContent=bn(p(s/60)+":"+p(s%60))}
  if(s<=0&&!WENT&&cc){WENT=true;location.href="{{ url_for('live', did=d.id) if d else '' }}"}}
 tick();setInterval(tick,1000);
+document.querySelectorAll(".nt").forEach(function(el){var k="nd_"+el.dataset.id;try{if(localStorage.getItem(k))el.remove()}catch(e){}
+ el.querySelector("button").onclick=function(){try{localStorage.setItem(k,1)}catch(e){}el.remove()}});
 var ab=document.getElementById("ad");
 ab.onclick=function(){var b=this,n=5;b.disabled=true;b.textContent=bn(n)+"…";
  var i=setInterval(function(){n--;if(n>0){b.textContent=bn(n)+"…";return}clearInterval(i);
