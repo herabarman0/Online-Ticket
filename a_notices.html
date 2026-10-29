@@ -1,0 +1,21 @@
+{% extends "a_base.html" %}
+{% block title %}নোটিশ{% endblock %}
+{% block content %}
+<div class="hd"><h1>হোম পেজের নোটিশ</h1></div>
+<div class="card"><h2>নতুন নোটিশ</h2>
+<form method="post" action="{{ url_for('admin_notice_add') }}">
+  <label for="t">লেখা</label><input id="t" name="text" maxlength="300" required placeholder="যেমন: আজ রাত ৯টায় বিশেষ ড্র!">
+  <div class="row">
+    <div><label for="l">ধরন</label><select id="l" name="level"><option value="imp">জরুরি (লাল)</option><option value="info">সাধারণ (হলুদ)</option></select></div>
+    <div><label for="h">কতক্ষণ দেখাবে</label><select id="h" name="hours"><option value="6">৬ ঘণ্টা</option><option value="24" selected>১ দিন</option><option value="72">৩ দিন</option><option value="168">৭ দিন</option><option value="0">নিজে না সরানো পর্যন্ত</option></select></div>
+  </div>
+  <label for="k">লিংক (ঐচ্ছিক)</label><input id="k" name="link" maxlength="300" placeholder="https://… বা /ticket">
+  <p><button class="bt pk">হোমে দেখান</button></p>
+</form></div>
+<div class="card"><h2>চালু নোটিশ ({{ rows|length|bn }})</h2>
+{% for n in rows %}<div style="display:flex;gap:10px;justify-content:space-between;align-items:center;padding:10px 0;border-bottom:1px solid var(--line)">
+  <div><span class="bd {{ 'bad' if n.level=='imp' else 'gold' }}">{{ 'জরুরি' if n.level=='imp' else 'সাধারণ' }}</span> {{ n.text }}<br><span class="mut sm">{% if n.exp %}{{ 'শেষ হয়েছে' if n.exp<now else 'শেষ হবে: ' ~ (n.exp|when) }}{% else %}সরানো পর্যন্ত চলবে{% endif %}</span></div>
+  <form method="post" action="{{ url_for('admin_notice_del', nid=n.id) }}"><button class="bt rd sm">সরান</button></form></div>
+{% else %}<p class="mut">কোনো নোটিশ নেই।</p>{% endfor %}
+<p class="mut sm">সর্বোচ্চ ৮টি নোটিশ রাখা যায়; মেয়াদ শেষ হলে নিজে থেকেই হোমে আর দেখায় না।</p></div>
+{% endblock %}
