@@ -1,5 +1,6 @@
 {% extends "base.html" %}
 {% block content %}
+{% if u.get('status','approved')=='pending' %}<div class="nt0" style="border-radius:16px;padding:12px 14px;margin:0 0 12px;font-weight:600;background:#FFC53D;color:#2A0E4A">⏳ আপনার অ্যাকাউন্ট অ্যাডমিনের অ্যাপ্রুভালের অপেক্ষায়। অ্যাপ্রুভ হলে ১০০ পয়েন্ট বোনাস পাবেন।</div>{% endif %}
 {% for n in notes %}<div class="nt" data-id="{{ n.id }}" style="position:relative;border-radius:16px;padding:12px 38px 12px 14px;margin:0 0 12px;font-weight:600;{{ 'background:#FF2E7E;color:#fff' if n.level=='imp' else 'background:#FFC53D;color:#2A0E4A' }}">{{ '📢 ' if n.level=='imp' else '' }}{{ n.text }}{% if n.link %} <a href="{{ n.link }}" style="color:inherit;text-decoration:underline">দেখুন</a>{% endif %}<button type="button" aria-label="বন্ধ করুন" style="position:absolute;right:6px;top:6px;width:30px;height:30px;border:0;background:transparent;color:inherit;font-size:1.3rem;cursor:pointer">×</button></div>{% endfor %}
 {% if live_d %}<a class="ad" style="background:var(--pink);color:#fff;text-decoration:none;margin:0 0 14px" href="{{ url_for('live', did=live_d.id) }}"><div><b>লাইভ ড্র {{ 'চলছে' if live_d.status=='drawing' else 'শীঘ্রই শুরু' }}</b><small style="opacity:.9">{{ live_d.title }} · দেখতে চাপুন</small></div></a>{% endif %}
 {% include "wincards.html" %}
@@ -27,6 +28,7 @@
 {% elif not last and not live_d %}<div class="empty">এখন কোনো ড্র চালু নেই। নতুন ড্র শীঘ্রই আসছে।</div>{% endif %}
 <div class="row2"><div class="st"><b>{{ tcount|bn }}</b><span>মোট টিকিট</span></div><div class="st"><b>{{ u.wins|bn }}</b><span>জয়</span></div></div>
 
+<a class="btn sun" style="display:block;text-align:center;margin:0 0 12px" href="{{ url_for('wallet') }}">ওয়ালেট — পয়েন্ট পাঠান / গ্রহণ করুন</a>
 <div class="streak"><b>৭ দিনের স্ট্রিক</b><span class="sub"> · রোজ ঢুকলে বোনাস বাড়ে</span>
   <div class="days">{% for i in range(1,8) %}{% set today_i = (i==day.done+1 and not day.claimed) %}<div><i class="{{ 'd' if i<=day.done else ('t' if today_i) }}">{{ '✓' if i<=day.done else i|bn }}</i>{{ 'আজ' if today_i else i|bn }}</div>{% endfor %}</div>
   <form method="post" action="{{ url_for('bonus') }}"><button class="btn sun" {{ 'disabled' if day.claimed }}>{{ 'আজকের বোনাস নেওয়া হয়েছে' if day.claimed else 'আজকের বোনাস নিন +' ~ (day.reward|bn) }}</button></form></div>
