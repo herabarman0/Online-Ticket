@@ -36,7 +36,7 @@
   <p class="mut sm">ব্যান করা ইউজার আর লগইন বা টিকিট কিনতে পারে না।</p></div>
 </div>
 
-<div class="card"><h2>টিকিট ও সিরিয়াল ({{ x.get('tix',0)|bn }}টি, সর্বশেষ ১০০টি দেখানো হচ্ছে)</h2><div class="sc"><table class="rt"><thead><tr><th>সিরিয়াল</th><th>ড্র</th><th>অবস্থা</th><th>সময়</th></tr></thead><tbody>
+<div class="card"><h2>টিকিট ও সিরিয়াল ({{ x.get('tix',0)|bn }}টি, সর্বশেষ ৬০টি দেখানো হচ্ছে)</h2><div class="sc"><table class="rt"><thead><tr><th>সিরিয়াল</th><th>ড্র</th><th>অবস্থা</th><th>সময়</th></tr></thead><tbody>
 {% for t in tix %}<tr><td data-l="সিরিয়াল"><b>#{{ t.num|pad4 }}</b></td><td data-l="ড্র"><a href="{{ url_for('admin_draw', did=t.draw) }}">{{ t.title }}</a></td>
   <td data-l="অবস্থা">{% if t.won %}<span class="bd gold">জিতেছে</span>{% elif t.status=='open' %}<span class="bd">চলছে</span>{% else %}<span class="bd mu">শেষ</span>{% endif %}</td><td data-l="সময়">{{ t.ts|when }}</td></tr>
 {% else %}<tr><td>কোনো টিকিট নেই</td></tr>{% endfor %}</tbody></table></div></div>
