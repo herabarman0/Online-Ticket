@@ -20,9 +20,9 @@
   <dt>কার মাধ্যমে এসেছে</dt><dd>{{ by.name if by else '—' }}</dd>
   {% if x.banned %}<dt>ব্যানের কারণ</dt><dd>{{ x.ban_reason or '—' }}</dd>{% endif %}</dl></div>
 <div class="card"><h2>পয়েন্ট যোগ করুন</h2>
-  <p class="mut sm">অ্যাডমিন ব্যালেন্স: <b>{{ bal|m }}</b> পয়েন্ট। যোগ করলে এখান থেকে কাটবে; ইউজারের পয়েন্ট কমানো যায় না।</p>
+  <p class="mut sm">অ্যাডমিন ব্যালেন্স: <b>{{ bal|short }}</b> পয়েন্ট। যোগ করলে এখান থেকে কাটবে; ইউজারের পয়েন্ট কমানো যায় না।</p>
   <form method="post" action="{{ url_for('admin_points', uid=x.id) }}">
-    <label for="a">কত পয়েন্ট</label><input id="a" name="amount" required inputmode="numeric" pattern="[0-9০-৯]+">
+    <label for="a">কত পয়েন্ট</label><input id="a" name="amount" required inputmode="text" placeholder="যেমন 500 বা 1M">
     <label for="r">কারণ</label><input id="r" name="reason" maxlength="80">
     <p><button class="bt pk">যোগ করুন</button></p></form></div>
 <div class="card"><h2>নাম ও ফোন বদলান</h2>
