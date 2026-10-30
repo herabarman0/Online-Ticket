@@ -18,11 +18,20 @@ a{color:inherit}h1,h2,h3{margin:0}
 .sb nav a.on{background:var(--gold);color:var(--plum);font-weight:700}
 .sb .me{margin-top:auto;font-size:.82rem;color:#B5A5D3;word-break:break-all}
 .sb .me a{color:#fff}
+@media(min-width:900px){.sb nav a.lo{display:none}}
 .mn{margin-left:232px;min-height:100vh}
 .ct{max-width:1100px;margin:0 auto;padding:24px}
+.mb{display:none}
 @media(max-width:899px){
- .sb{position:sticky;width:auto;bottom:auto;flex-direction:row;align-items:center;gap:10px;padding:10px 12px;padding-top:calc(10px + env(safe-area-inset-top,0px));overflow-x:auto}
- .sb .br{margin:0;font-size:1.3rem}.sb nav{flex-direction:row}.sb .me{display:none}
+ .sb{position:sticky;top:0;width:auto;bottom:auto;flex-direction:row;align-items:center;justify-content:space-between;gap:10px;padding:10px 14px;padding-top:calc(10px + env(safe-area-inset-top,0px))}
+ .sb .br{margin:0;font-size:1.4rem}.sb .me{display:none}
+ .mb{display:flex;align-items:center;gap:8px;background:rgba(255,255,255,.14);color:#fff;border:0;border-radius:12px;padding:8px 14px;font:inherit;font-weight:700;cursor:pointer}
+ .mb i{display:block;width:18px;height:2px;background:#fff;box-shadow:0 6px 0 #fff,0 -6px 0 #fff}
+ .sb nav{display:none;position:absolute;left:0;right:0;top:100%;background:var(--plum);padding:8px 14px 16px;box-shadow:0 18px 30px rgba(0,0,0,.35);max-height:calc(100dvh - 60px);overflow-y:auto;grid-template-columns:1fr 1fr;gap:8px}
+ .sb.open nav{display:grid}
+ .sb nav a{background:rgba(255,255,255,.08);text-align:center;padding:14px 8px;font-size:1.02rem;white-space:normal}
+ .sb nav a.on{background:var(--gold)}
+ .sb nav a.lo{grid-column:1/-1;background:rgba(214,36,74,.25);color:#fff}
  .mn{margin-left:0}.ct{padding:16px 14px 40px}}
 .hd{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:16px}
 h1{font-size:1.7rem}h2{font-size:1.15rem;margin-bottom:12px}
@@ -60,7 +69,8 @@ button:focus-visible,a:focus-visible,input:focus-visible,select:focus-visible{ou
 {% set ep = request.endpoint %}
 <aside class="sb">
   <a class="br" href="{{ url_for('admin') }}">লাকি মেলা</a>
-  <nav>
+  <button class="mb" type="button" id="mb" aria-expanded="false" aria-controls="mnav"><i></i>মেনু</button>
+  <nav id="mnav">
     <a href="{{ url_for('admin') }}" class="{{ 'on' if ep=='admin' }}">ড্যাশবোর্ড</a>
     <a href="{{ url_for('admin_approvals') }}" class="{{ 'on' if ep=='admin_approvals' }}">অ্যাপ্রুভাল</a>
     <a href="{{ url_for('admin_users') }}" class="{{ 'on' if ep in ('admin_users','admin_user') }}">ইউজার</a>
@@ -69,6 +79,7 @@ button:focus-visible,a:focus-visible,input:focus-visible,select:focus-visible{ou
     <a href="{{ url_for('admin_claims') }}" class="{{ 'on' if ep=='admin_claims' }}">পুরস্কার দাবি</a>
     <a href="{{ url_for('admin_logs') }}" class="{{ 'on' if ep=='admin_logs' }}">লগ</a>
     <a href="{{ url_for('home') }}">সাইট দেখুন</a>
+    <a class="lo dsk-hide" href="{{ url_for('logout') }}">লগআউট</a>
   </nav>
   <div class="me">{{ admin_email }}<br><a href="{{ url_for('logout') }}">লগআউট</a></div>
 </aside>
@@ -76,5 +87,8 @@ button:focus-visible,a:focus-visible,input:focus-visible,select:focus-visible{ou
   {% for m in get_flashed_messages() %}<div class="fl" role="status">{{ m }}</div>{% endfor %}
   {% block content %}{% endblock %}
 </main></div>
+<script>var sb=document.querySelector(".sb"),mb=document.getElementById("mb");
+mb.onclick=function(){var o=sb.classList.toggle("open");mb.setAttribute("aria-expanded",o)};
+document.addEventListener("click",function(e){if(sb.classList.contains("open")&&!sb.contains(e.target)){sb.classList.remove("open");mb.setAttribute("aria-expanded","false")}});</script>
 </body>
 </html>
