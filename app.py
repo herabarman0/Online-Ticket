@@ -30,6 +30,8 @@ TREASURY, FEE_PCT, MIN_SEND, MAX_SEND = 1_000_000_000, 5, 10, 100000  # admin po
 KL = {"daily": "প্রতিদিন", "weekly": "সাপ্তাহিক", "monthly": "মাসিক", "custom": "বিশেষ"}
 KO = {"daily": 0, "weekly": 1, "monthly": 2}
 ADMIN_PASSWORD = os.environ.get("ADMIN_PASSWORD", "")
+AD_HTML = os.environ.get("AD_HTML", "")  # Adsterra (or other) ad code, set in Render Environment
+AD_WAIT = 8  # seconds the ad must stay open before the reward
 ADMINS = {e.strip().lower() for e in os.environ.get("ADMIN_EMAILS", "").split(",") if e.strip()}
 app.jinja_env.globals.update(KL=KL, MAXT=MAXT, AD_REWARD=AD_REWARD, FEE_PCT=FEE_PCT)
 
@@ -344,6 +346,8 @@ def signup():
     if request.method == "POST":
         name, email, pw = f.get("name", "").strip()[:40], f.get("email", "").strip().lower(), f.get("pw", "")
         phone, addr, fb = norm_phone(f.get("phone", "")), f.get("address", "").strip()[:200], fb_link(f.get("fb", ""))
+        dev = f.get("dv", "")
+        dev = dev if re.fullmatch(r"[a-f0-9]{16,40}", dev) else ""
         try:
             age = int(en(f.get("age", "")).strip())
         except ValueError:
@@ -364,9 +368,15 @@ def signup():
             flash("এই ইমেইলে অ্যাকাউন্ট খুলতে হবে না, সরাসরি লগইন করুন।")
         elif by_email(email):
             flash("এই ইমেইলে আগেই অ্যাকাউন্ট আছে। লগইন করুন।")
+        elif taken("phone", phone):
+            flash("এই মোবাইল নম্বরে আগেই অ্যাকাউন্ট আছে। একজন একটিই অ্যাকাউন্ট খুলতে পারবেন।")
+        elif taken("fbk", fb_key(fb)):
+            flash("এই ফেসবুক প্রোফাইলে আগেই অ্যাকাউন্ট আছে। একজন একটিই অ্যাকাউন্ট খুলতে পারবেন।")
+        elif dev and taken("dev", dev):
+            flash("এই ডিভাইস থেকে আগেই অ্যাকাউন্ট খোলা হয়েছে। একটি ডিভাইসে একটিই অ্যাকাউন্ট চলবে।")
         else:
             session["uid"] = new_user(email, name, generate_password_hash(pw), session.pop("ref", "") or f.get("ref", "").strip().upper(),
-                                      phone, dict(addr=addr, age=age, fb=fb))
+                                      phone, dict(addr=addr, age=age, fb=fb, fbk=fb_key(fb), dev=dev, ip=client_ip()))
             flash("অ্যাকাউন্ট খোলা হয়েছে। অ্যাডমিন অ্যাপ্রুভ করলে ১০০ পয়েন্ট বোনাস পাবেন।")
             return redirect(url_for("home"))
     return render_template("auth.html", mode="signup", gcid=GCID, ref=session.get("ref", ""), f=f)
@@ -389,7 +399,7 @@ def login():
                     flash("আপনার অ্যাকাউন্ট বন্ধ করা হয়েছে। অ্যাডমিনের সাথে যোগাযোগ করুন।")
                     return render_template("auth.html", mode="login", gcid=GCID, ref="", f={})
                 session["uid"] = u["id"]
-                fs.collection("users").document(u["id"]).update({"last_login": time.time()})
+                fs.collection("users").document(u["id"]).update({"last_login": time.time(), "ip": client_ip()})
                 return redirect(url_for("home"))
         flash("ইমেইল বা পাসওয়ার্ড ঠিক নয়।")
     return render_template("auth.html", mode="login", gcid=GCID, ref="", f={})
@@ -436,7 +446,7 @@ def home():
     last = None if (d or live_d) else last_result()
     ad_left = AD_MAX - (u.get("ad_n", 0) if u.get("ad_day") == today().isoformat() else 0)
     return render_template("home.html", u=u, d=d, tcount=u.get("tix", 0), day=streak_info(u), ad_left=ad_left,
-                           live_d=live_d, last=last, wins=my_wins(u), now=time.time(), notes=notices_now())
+                           live_d=live_d, last=last, wins=my_wins(u), now=time.time(), notes=notices_now(), ad_html=AD_HTML, ad_wait=AD_WAIT)
 
 @firestore.transactional
 def _bonus_tx(tx, ref_, t, y):
@@ -478,12 +488,23 @@ def _ad_tx(tx, ref_, t):
     tx.set(TREF, {"bal": bal - AD_REWARD}, merge=True)
     return u["points"] + AD_REWARD, AD_MAX - n - 1
 
+@app.post("/ad/start")
+@login_required
+def ad_start():
+    if is_pending(me()):
+        return jsonify(ok=False), 403
+    session["ad_t"] = time.time()
+    return jsonify(ok=True, wait=AD_WAIT)
+
 @app.post("/ad")
 @login_required
 def ad():
     # TODO: replace with a server-side reward callback from your ad network (AdMob SSV / Unity) before going live
     if is_pending(me()):
         return jsonify(ok=False, msg="অ্যাকাউন্ট অ্যাপ্রুভ হয়নি"), 403
+    t0 = session.pop("ad_t", 0)  # one reward per ad that was really opened and kept open
+    if not t0 or time.time() - t0 < AD_WAIT - 0.5 or time.time() - t0 > 900:
+        return jsonify(ok=False, msg="আগে বিজ্ঞাপন দেখুন"), 400
     r = _ad_tx(fs.transaction(), fs.collection("users").document(me()["id"]), today().isoformat())
     if r == "empty":
         return jsonify(ok=False, msg="এখন পুরস্কার নেই"), 503
@@ -595,8 +616,10 @@ def profile_info():
         flash("বয়স কমপক্ষে ১৮ হতে হবে।")
     elif not fb:
         flash("সঠিক ফেসবুক প্রোফাইল লিংক দিন।")
+    elif fb_key(fb) != u.get("fbk") and taken("fbk", fb_key(fb)):
+        flash("এই ফেসবুক প্রোফাইলে আগেই অ্যাকাউন্ট আছে।")
     else:
-        fs.collection("users").document(u["id"]).update({"addr": addr, "age": age, "fb": fb})
+        fs.collection("users").document(u["id"]).update({"addr": addr, "age": age, "fb": fb, "fbk": fb_key(fb)})
         flash("তথ্য সেভ হয়েছে।")
     return redirect(url_for("profile"))
 
@@ -661,6 +684,18 @@ def norm_phone(s):
 
 def en(s):
     return (s or "").translate(str.maketrans("০১২৩৪৫৬৭৮৯", "0123456789"))
+
+def fb_key(link):
+    # same Facebook profile in any spelling (www., m., trailing slash) gives the same key
+    p = urlparse(link)
+    q = re.search(r"id=(\d+)", p.query or "")
+    return (p.path.lower().rstrip("/") + (("?id=" + q.group(1)) if q else "")) or None
+
+def client_ip():
+    return (request.headers.get("X-Forwarded-For", request.remote_addr or "").split(",")[0].strip())[:45]
+
+def taken(field, val):
+    return bool(val) and bool(list(fs.collection("users").where(field, "==", val).limit(1).stream()))
 
 def fb_link(s):
     s = (s or "").strip()
@@ -992,6 +1027,10 @@ def _approve_tx(tx, uref):
 @admin_required
 def admin_approvals():
     rows = sorted((snap(s) for s in fs.collection("users").where("status", "==", "pending").limit(50).stream()), key=lambda x: x.get("created", 0))
+    U = fs.collection("users")
+    for x in rows:  # hints only: several accounts from one network are common (shared Wi-Fi / mobile data)
+        x["same_dev"] = max(0, (cnt(U.where("dev", "==", x["dev"])) or 1) - 1) if x.get("dev") else 0
+        x["same_ip"] = max(0, (cnt(U.where("ip", "==", x["ip"])) or 1) - 1) if x.get("ip") else 0
     return render_template("a_approvals.html", rows=rows, SIGNUP=SIGNUP)
 
 @app.post("/admin/user/<uid>/approve")
