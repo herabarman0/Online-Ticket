@@ -488,6 +488,17 @@ def _ad_tx(tx, ref_, t):
     tx.set(TREF, {"bal": bal - AD_REWARD}, merge=True)
     return u["points"] + AD_REWARD, AD_MAX - n - 1
 
+@app.route("/adframe")
+@login_required
+def adframe():
+    # the ad runs on a real page of our own domain (ad networks check the domain), shown inside the reward box
+    body = AD_HTML or '<p style="font-family:sans-serif;text-align:center;padding:40px">Ad</p>'
+    r = app.response_class('<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head>'
+                           '<body style="margin:0;display:flex;justify-content:center;align-items:center;min-height:100vh;background:#fff">' + body + '</body></html>',
+                           mimetype="text/html")
+    r.headers["Cache-Control"] = "no-store"
+    return r
+
 @app.post("/ad/start")
 @login_required
 def ad_start():
