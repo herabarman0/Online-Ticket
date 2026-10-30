@@ -12,7 +12,7 @@
   <div class="lt"><a href="{{ url_for('login') }}" class="{{ 'on' if mode=='login' }}">লগইন</a><a href="{{ url_for('signup') }}" class="{{ 'on' if mode=='signup' }}">নতুন অ্যাকাউন্ট</a><a class="lang" style="margin-left:auto" href="{{ url_for('set_lang', code='bn' if lang=='en' else 'en') }}">{{ 'বাংলা' if lang=='en' else 'EN' }}</a></div>
   {% for m in get_flashed_messages() %}<div class="fl" role="alert">{{ m }}</div>{% endfor %}
   <form class="f" method="post">
-    {% if mode=='signup' %}<label for="name">পুরো নাম</label><input id="name" name="name" required maxlength="40" autocomplete="name" value="{{ f.get('name','') }}">
+    {% if mode=='signup' %}<input type="hidden" name="dv" id="dv"><label for="name">পুরো নাম</label><input id="name" name="name" required maxlength="40" autocomplete="name" value="{{ f.get('name','') }}">
     <label for="phone">মোবাইল নম্বর</label><input id="phone" name="phone" required inputmode="tel" placeholder="০১৭XXXXXXXX" autocomplete="tel" value="{{ f.get('phone','') }}">
     <label for="ad">পুরো ঠিকানা</label><input id="ad" name="address" required maxlength="200" autocomplete="street-address" value="{{ f.get('address','') }}">
     <label for="ag">বয়স (কমপক্ষে ১৮)</label><input id="ag" name="age" required inputmode="numeric" value="{{ f.get('age','') }}">
@@ -23,7 +23,11 @@
     {% if mode=='signup' %}<label for="ok" style="display:flex;gap:10px;align-items:flex-start;font-weight:400;margin:14px 0;cursor:pointer"><input type="checkbox" id="ok" name="ok" value="1" style="width:24px;height:24px;flex:none;margin:2px 0 0">আমি সম্মতি দিচ্ছি, আমার তথ্য অ্যাকাউন্ট যাচাই ও পুরস্কার পাঠাতে ব্যবহার করা হবে।</label>{% endif %}
     <button class="btn" type="submit" id="sbtn" {{ 'disabled' if mode=='signup' }}>{{ 'অ্যাকাউন্ট খুলুন' if mode=='signup' else 'ঢুকুন' }}</button>
     {% if mode=='signup' %}<p class="sub" style="text-align:center;margin-top:8px">অ্যাডমিন অ্যাপ্রুভ করলে ১০০ পয়েন্ট বোনাস পাবেন।</p>
-    <script>var o=document.getElementById("ok"),b=document.getElementById("sbtn");o.onchange=function(){b.disabled=!o.checked}</script>{% endif %}
+    <script>(function(){var k="dv",v="";try{v=localStorage.getItem(k)||""}catch(e){}
+ if(!v){var m=document.cookie.match(/(?:^|; )dv=([a-f0-9]+)/);v=m?m[1]:""}
+ if(!v){var a=new Uint8Array(12);(window.crypto||window.msCrypto).getRandomValues(a);v=Array.prototype.map.call(a,function(x){return("0"+x.toString(16)).slice(-2)}).join("")}
+ try{localStorage.setItem(k,v)}catch(e){}document.cookie="dv="+v+";max-age=63072000;path=/;samesite=lax";document.getElementById("dv").value=v})();
+var o=document.getElementById("ok"),b=document.getElementById("sbtn");o.onchange=function(){b.disabled=!o.checked}</script>{% endif %}
     {% if gcid %}<div style="text-align:center;color:var(--mute);margin:12px 0">অথবা</div>
     <div id="g_id_onload" data-client_id="{{ gcid }}" data-callback="onGoogle" data-auto_prompt="false"></div>
     <div class="g_id_signin" data-type="standard" data-size="large" data-text="continue_with" data-width="300"></div>{% endif %}
