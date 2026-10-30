@@ -110,7 +110,10 @@ EN = {
     "সার্ভারে সমস্যা হয়েছে, একটু পরে আবার চেষ্টা করুন।": "Server problem, please try again in a moment.", "সীমা শেষ": "Limit reached",
     "সে পাবে": "They get", "স্পিন চলছে… বিজয়ী নম্বর খোঁজা হচ্ছে": "Spinning… finding the winning number", "হোম": "Home",
     "১ম, ২য় ও ৩য়": "1st, 2nd and 3rd", "১ম": "1st", "২য়": "2nd", "৩য়": "3rd", "৩টি পুরস্কার": "3 prizes", "৭ সংখ্যার আইডি": "7-digit ID",
-    "অ্যাকাউন্ট": "Account", "আপনার কাটবে": "You will pay", "কে": "by",
+    "অ্যাকাউন্ট": "Account", "এই মোবাইল নম্বরে আগেই অ্যাকাউন্ট আছে। একজন একটিই অ্যাকাউন্ট খুলতে পারবেন।": "An account with this mobile number already exists. Only one account per person.",
+    "এই ফেসবুক প্রোফাইলে আগেই অ্যাকাউন্ট আছে। একজন একটিই অ্যাকাউন্ট খুলতে পারবেন।": "An account with this Facebook profile already exists. Only one account per person.",
+    "এই ডিভাইস থেকে আগেই অ্যাকাউন্ট খোলা হয়েছে। একটি ডিভাইসে একটিই অ্যাকাউন্ট চলবে।": "An account was already created from this device. Only one account per device.",
+    "এই ফেসবুক প্রোফাইলে আগেই অ্যাকাউন্ট আছে।": "An account with this Facebook profile already exists.", "বিজ্ঞাপন দেখছেন": "Watching the ad", "সেকেন্ড অপেক্ষা করুন": "seconds, please wait", "পয়েন্ট নিন": "Claim points", "আগে বিজ্ঞাপন দেখুন": "Watch the ad first", "এখন পুরস্কার নেই": "No rewards available now", "আপনার কাটবে": "You will pay", "কে": "by",
 }
 
 _alt = re.compile("|".join(re.escape(k) for k in sorted(EN, key=len, reverse=True)))
