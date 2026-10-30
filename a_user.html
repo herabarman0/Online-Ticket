@@ -14,7 +14,7 @@
 <div class="g2">
 <div class="card"><h2>পরিচিতি</h2><dl class="kv">
   <dt>ইউজার আইডি</dt><dd>{{ (x.pid or '—')|bn }}</dd><dt>ইমেইল</dt><dd>{{ x.email }}</dd><dt>ফোন</dt><dd>{{ x.phone or '—' }}</dd>
-  <dt>ঠিকানা</dt><dd>{{ x.addr or '—' }}</dd><dt>বয়স</dt><dd>{{ x.age|bn if x.age else '—' }}</dd><dt>ফেসবুক</dt><dd>{% if x.fb %}<a href="{{ x.fb }}" target="_blank" rel="noopener noreferrer">{{ x.fb }}</a>{% else %}—{% endif %}</dd>
+  <dt>ডিভাইস</dt><dd>{{ (x.dev or '—')[:8] }}</dd><dt>আইপি</dt><dd>{{ x.ip or '—' }}</dd><dt>ঠিকানা</dt><dd>{{ x.addr or '—' }}</dd><dt>বয়স</dt><dd>{{ x.age|bn if x.age else '—' }}</dd><dt>ফেসবুক</dt><dd>{% if x.fb %}<a href="{{ x.fb }}" target="_blank" rel="noopener noreferrer">{{ x.fb }}</a>{% else %}—{% endif %}</dd>
   <dt>যোগ দিয়েছেন</dt><dd>{{ x.created|when if x.created else '—' }}</dd><dt>শেষ লগইন</dt><dd>{{ x.last_login|when if x.last_login else '—' }}</dd>
   <dt>রেফার কোড</dt><dd>{{ x.code }}</dd><dt>রেফার করেছেন</dt><dd>{{ (refs if refs is not none else '—')|bn }} জন</dd>
   <dt>কার মাধ্যমে এসেছে</dt><dd>{{ by.name if by else '—' }}</dd>
