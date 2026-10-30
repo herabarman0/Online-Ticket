@@ -1,6 +1,6 @@
 {% extends "base.html" %}
 {% block content %}
-<h2>পুরস্কার দাবি</h2><p class="sub">{{ r.title }} · টিকিট #{{ r.winner_num|pad4 }} · {{ r.prize|m }} পয়েন্ট</p>
+<h2>পুরস্কার দাবি</h2><p class="sub">{{ r.title|keep }} · টিকিট #{{ r.winner_num|pad4 }} · {{ r.prize|m }} পয়েন্ট</p>
 <form class="f" method="post" id="cf" novalidate>
   <label for="n">পুরো নাম</label><input id="n" name="name" required maxlength="60" value="{{ f.get('name','') }}" autocomplete="name">
   <label for="ph">মোবাইল নম্বর</label><input id="ph" name="phone" required inputmode="tel" placeholder="০১৭XXXXXXXX" value="{{ f.get('phone','') }}" autocomplete="tel">
