@@ -13,7 +13,7 @@
 </style>
 <h2>লাইভ ড্র</h2>
 <div class="lv">
-  <div class="t">{{ d.title }}</div>
+  <div class="t">{{ d.title|keep }}</div>
   <div class="pz">{{ d.prize|m }} পয়েন্ট</div>{% if d.prizes and d.prizes|length>1 %}<div style="font-weight:700">{{ d|prizeline }}</div>{% endif %}
   <div class="reel" id="reel" aria-live="off">০০০০</div>
   <div class="msg" id="msg" role="status">লোড হচ্ছে…</div>
