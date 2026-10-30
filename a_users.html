@@ -8,12 +8,13 @@
   <div><label for="f">ফিল্টার</label><select id="f" name="f"><option value="">সবাই</option><option value="banned" {{ 'selected' if f=='banned' }}>শুধু ব্যান করা</option></select></div>
   <button class="bt pk">দেখুন</button>
 </form>
-<div class="card"><div class="sc"><table class="rt"><thead><tr><th>নাম</th><th>ইমেইল</th><th>ফোন</th><th class="r">পয়েন্ট</th><th class="r">টিকিট</th><th class="r">জয়</th><th>অবস্থা</th><th></th></tr></thead><tbody>
+<div class="card"><div class="sc"><table class="rt"><thead><tr><th>নাম</th><th>আইডি</th><th class="r">পয়েন্ট</th><th>অবস্থা</th><th></th></tr></thead><tbody>
 {% for x in rows %}<tr>
   <td data-l="নাম"><b>{{ x.name }}</b>{% if x.rank %} <span class="bd gold">টপ {{ x.rank|bn }}</span>{% endif %}</td>
-  <td data-l="ইমেইল">{{ x.email }}</td><td data-l="ফোন">{{ x.phone or '—' }}</td>
-  <td data-l="পয়েন্ট" class="r">{{ x.points|bn }}</td><td data-l="টিকিট" class="r">{{ x.get('tix',0)|bn }}</td><td data-l="জয়" class="r">{{ x.get('wins',0)|bn }}</td>
-  <td data-l="অবস্থা">{% if x.banned %}<span class="bd bad">ব্যান</span>{% else %}<span class="bd ok">সক্রিয়</span>{% endif %}</td>
-  <td class="r"><a class="bt sm" href="{{ url_for('admin_user', uid=x.id) }}">খুলুন</a></td></tr>
-{% else %}<tr><td>কোনো ইউজার পাওয়া যায়নি</td></tr>{% endfor %}</tbody></table></div></div>
+  <td data-l="আইডি">{{ (x.pid or '—')|bn }}</td>
+  <td data-l="পয়েন্ট" class="r">{{ x.points|bn }}</td>
+  <td data-l="অবস্থা">{% if x.banned %}<span class="bd bad">ব্যান</span>{% elif x.get('status','approved')=='pending' %}<span class="bd gold">পেন্ডিং</span>{% else %}<span class="bd ok">সক্রিয়</span>{% endif %}</td>
+  <td class="r"><a class="bt sm" href="{{ url_for('admin_user', uid=x.id) }}">বিস্তারিত</a></td></tr>
+{% else %}<tr><td>কোনো ইউজার পাওয়া যায়নি</td></tr>{% endfor %}</tbody></table></div>
+{% if more %}<p style="text-align:center;margin:14px 0 0"><a class="bt gh" href="?s={{ s }}&after={{ more }}">আরও দেখুন</a></p>{% endif %}</div>
 {% endblock %}
