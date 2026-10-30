@@ -4,6 +4,8 @@
 <div class="hd"><h1>অ্যাকাউন্ট অ্যাপ্রুভাল ({{ rows|length|bn }})</h1></div>
 {% for x in rows %}<div class="card"><div class="hd" style="margin:0 0 8px"><h2 style="margin:0"><a href="{{ url_for('admin_user', uid=x.id) }}">{{ x.name }}</a> <span class="bd">আইডি {{ x.pid|bn }}</span></h2><span class="mut sm">{{ x.created|when }}</span></div>
 <dl class="kv"><dt>ইমেইল</dt><dd>{{ x.email }}</dd><dt>ফোন</dt><dd>{{ x.phone or '—' }}</dd><dt>ঠিকানা</dt><dd>{{ x.addr or '—' }}</dd><dt>বয়স</dt><dd>{{ x.age|bn if x.age else '—' }}</dd><dt>ফেসবুক</dt><dd>{% if x.fb %}<a href="{{ x.fb }}" target="_blank" rel="noopener noreferrer">{{ x.fb }}</a>{% else %}—{% endif %}</dd></dl>
+{% if x.same_dev %}<p class="fl" style="background:#FFE3EA;color:#B0123A">⚠ এই ডিভাইসে আরও {{ x.same_dev|bn }}টি অ্যাকাউন্ট আছে</p>{% endif %}
+{% if x.same_ip %}<p class="mut sm">একই ইন্টারনেট (আইপি) থেকে আরও {{ x.same_ip|bn }}টি অ্যাকাউন্ট আছে (এক বাসা/ওয়াইফাইতেও হতে পারে)</p>{% endif %}
 <div class="row" style="margin-top:12px"><form method="post" action="{{ url_for('admin_approve', uid=x.id) }}"><button class="bt pk">অ্যাপ্রুভ (+{{ SIGNUP|bn }} পয়েন্ট)</button></form>
 <form method="post" action="{{ url_for('admin_reject', uid=x.id) }}" onsubmit="return confirm('আবেদন বাতিল করে অ্যাকাউন্ট মুছবেন?')"><button class="bt rd">বাতিল</button></form></div></div>
 {% else %}<div class="card mut">কোনো আবেদন অপেক্ষায় নেই।</div>{% endfor %}
